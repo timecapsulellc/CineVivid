@@ -2,14 +2,14 @@
   <img src="assets/logo2.png" alt="SkyReels Logo" width="50%">
 </p>
 
-<h1 align="center">SkyReels V2: Infinite-Length Film Generative Model</h1> 
+<h1 align="center">CineVivid: AI Video Generation Web Application</h1>
 
 <p align="center">
 📑 <a href="https://arxiv.org/pdf/2504.13074">Technical Report</a> · 👋 <a href="https://www.skyreels.ai/home?utm_campaign=github_SkyReels_V2" target="_blank">Playground</a> · 💬 <a href="https://discord.gg/PwM6NYtccQ" target="_blank">Discord</a> · 🤗 <a href="https://huggingface.co/collections/Skywork/skyreels-v2-6801b1b93df627d441d0d0d9" target="_blank">Hugging Face</a> · 🤖 <a href="https://www.modelscope.cn/collections/SkyReels-V2-f665650130b144" target="_blank">ModelScope</a>
 </p>
 
 ---
-Welcome to the **SkyReels V2** repository! Here, you'll find the model weights and inference code for our infinite-length film generative models. To the best of our knowledge, it represents the first open-source video generative model employing **AutoRegressive Diffusion-Forcing architecture** that achieves the **SOTA performance** among publicly available models.
+Welcome to the **CineVivid** repository! This is a complete web application for AI video generation, built on top of the SkyReels-V2 infinite-length film generative model. The application provides an intuitive interface for text-to-video, image-to-video, lip sync, and other AI-powered video creation tools.
 
 
 ## 🔥🔥🔥 News!!
@@ -55,7 +55,7 @@ The demos above showcase 30-second videos generated using our SkyReels-V2 Diffus
 
 ### Web Application Setup
 
-SkyReels-V2 includes a complete web application with a SkyReels AI-inspired interface featuring all tools and components.
+CineVivid includes a complete web application with an intuitive AI-powered interface featuring all video generation tools and components.
 
 #### Frontend Installation
 ```shell
@@ -92,9 +92,9 @@ npm start
 
 ### Frontend Features
 
-#### 🎨 **Complete SkyReels AI Interface Clone**
-- **Exact navigation structure** with TOOLS dropdown
-- **All tool pages** matching SkyReels functionality
+#### 🎨 **Complete CineVivid AI Interface**
+- **Intuitive navigation structure** with TOOLS dropdown
+- **All tool pages** for AI video generation
 - **Responsive design** for all screen sizes
 - **Material-UI components** with custom theming
 

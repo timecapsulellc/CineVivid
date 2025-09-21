@@ -77,7 +77,7 @@ const Landing: React.FC = () => {
           <Toolbar sx={{ justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', mr: 4 }}>
-                SkyReels｜Visualize Your Story
+                CineVivid｜Visualize Your Story
               </Typography>
               <Box sx={{ display: 'flex', gap: 3 }}>
                 <Button color="inherit" component={Link} to="/">
@@ -252,7 +252,7 @@ const Landing: React.FC = () => {
       <Box sx={{ backgroundColor: '#1a1a1a', color: 'white', py: 8 }}>
         <Container maxWidth="md" sx={{ textAlign: 'center' }}>
           <Typography variant="h4" component="h2" gutterBottom>
-            Get exclusive first access to our all-new SkyReels
+            Get exclusive first access to our all-new CineVivid
           </Typography>
           <Typography variant="h6" sx={{ mb: 4, opacity: 0.8 }}>
             join the waiting list now to be among the first to try it.
