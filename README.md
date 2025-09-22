@@ -21,21 +21,38 @@ Welcome to the **CineVivid** repository! This is a complete web application for 
 * Feb 18, 2025: 🔥 we released [SkyReels-A1](https://github.com/SkyworkAI/SkyReels-A1). This is an open-sourced and effective framework for portrait image animation.
 * Feb 18, 2025: 🔥 We released [SkyReels-V1](https://github.com/SkyworkAI/SkyReels-V1). This is the first and most advanced open-source human-centric video foundation model.
 
-## 🎥 Demos
+## 🎥 CineVivid: AI Video Generation Platform
+
+CineVivid is a comprehensive AI-powered video creation platform built on SkyReels-V2, offering professional-grade tools for content creators, marketers, and filmmakers. Transform your ideas into cinematic videos with our suite of AI tools.
+
+### ✨ Key Features
+
+- **🎬 AI Video**: Advanced text-to-video generation with cinematic quality
+- **🎭 AI Drama**: Create compelling short dramas and storytelling content
+- **🖼️ Generate Image**: Professional image generation from text prompts
+- **🎤 Talking Avatar**: Bring characters to life with natural speech synthesis
+- **🎪 Generate Drama**: Specialized tool for cinematic short film creation
+- **🎨 Train Model**: Custom AI model training for personalized content
+- **🎵 Voiceover Integration**: ElevenLabs-powered professional voice synthesis
+- **🎯 Prompt Enhancement**: AI-powered prompt optimization using Qwen2.5-32B
+
+### 🎬 Demo Videos
 <table>
   <tr>
     <td align="center">
       <video src="https://github.com/user-attachments/assets/f6f9f9a7-5d5f-433c-9d73-d8d593b7ad25" width="100%"></video>
+      <br><small>AI Video Generation</small>
     </td>
     <td align="center">
       <video src="https://github.com/user-attachments/assets/0eb13415-f4d9-4aaf-bcd3-3031851109b9" width="100%"></video>
+      <br><small>Image-to-Video Animation</small>
     </td>
     <td align="center">
       <video src="https://github.com/user-attachments/assets/dcd16603-5bf4-4786-8e4d-1ed23889d07a" width="100%"></video>
+      <br><small>Long-form Video Creation</small>
     </td>
   </tr>
 </table>
-The demos above showcase 30-second videos generated using our SkyReels-V2 Diffusion Forcing model.
 
 
 ## 📑 TODO List
@@ -53,14 +70,39 @@ The demos above showcase 30-second videos generated using our SkyReels-V2 Diffus
 
 ## 🎬 CineVivid Web Application
 
-CineVivid is a complete web application built on top of SkyReels-V2, providing an intuitive AI-powered interface for video generation with additional features like voiceovers and prompt enhancement.
+CineVivid is a comprehensive AI-powered video creation platform inspired by SkyReels.ai, built on top of the SkyReels-V2 infinite-length film generative model. Our platform democratizes professional video production with an intuitive web interface and powerful AI tools.
 
-### Features
-- **Text-to-Video Generation**: Create videos from text prompts using SkyReels-V2
+### 🚀 Core Features
+
+#### **🎥 AI Video Generation**
+- **Text-to-Video**: Transform any text prompt into cinematic videos
+- **Image-to-Video**: Animate static images with natural motion
+- **Infinite Length**: Generate videos of any duration using Diffusion Forcing
+- **High Resolution**: Support for 540P and 720P video output
+
+#### **🎭 AI Drama & Storytelling**
+- **Generate Drama**: Create compelling short dramas with AI assistance
+- **Story Templates**: Pre-built templates for different drama genres
+- **Character Development**: AI-powered character consistency
+- **Scene Planning**: Automated scene composition and transitions
+
+#### **🎨 Creative Tools**
+- **Generate Image**: Professional image generation from text prompts
+- **Talking Avatar**: Bring characters to life with natural speech synthesis
+- **Voiceover Integration**: ElevenLabs-powered professional voice synthesis
+- **Lip Sync**: Perfect synchronization between audio and video
+
+#### **🔧 Advanced Features**
+- **Train Model**: Custom AI model training for personalized content
 - **Prompt Enhancement**: AI-powered prompt optimization using Qwen2.5-32B
-- **Voiceover Integration**: ElevenLabs TTS with multiple voice options
+- **Batch Processing**: Generate multiple videos simultaneously
+- **Style Transfer**: Apply custom artistic styles to generations
+
+#### **💼 Professional Features**
 - **Real-time Progress**: Live status updates during generation
 - **Video Preview**: Instant playback of generated content
+- **Credit System**: Flexible usage tracking and billing
+- **API Access**: RESTful API for integration
 - **Responsive UI**: Modern React interface with Material-UI
 
 ### Web Application Setup
@@ -391,52 +433,71 @@ npm start
 ### Frontend Features
 
 #### 🎨 **Complete CineVivid AI Interface**
-- **Intuitive navigation structure** with TOOLS dropdown
-- **All tool pages** for AI video generation
-- **Responsive design** for all screen sizes
-- **Material-UI components** with custom theming
+- **SkyReels.ai-inspired design** with professional UI/UX
+- **Intuitive navigation structure** with comprehensive TOOLS dropdown
+- **All major AI tools** implemented and functional
+- **Responsive design** optimized for all screen sizes
+- **Material-UI components** with custom CineVivid theming
 
-#### 📄 **Pages & Components**
+#### 📄 **Implemented Pages & Features**
 
 **🏠 Landing Page (`/`)**
-- Hero section with "AI Video" and "AI Drama" features
+- Hero section highlighting "AI Video" and "AI Drama" capabilities
+- Feature showcase with professional video demos
+- Navigation header with comprehensive TOOLS dropdown
+- Call-to-action buttons linking to all major tools
 - Recent creations gallery with video thumbnails
-- Navigation header with TOOLS dropdown
-- Call-to-action buttons linking to tools
 
 **📚 My Library (`/home/my-library`)**
 - Video gallery grid with thumbnails and metadata
-- Search and filter functionality (All/Completed/Processing)
+- Search and filter functionality (All/Completed/Processing/Failed)
 - Video cards with play buttons and status badges
 - Action menus (Play, Download, Share, Delete)
+- Pagination and sorting options
 
-**🎬 Text to Video (`/home/tools/to-video`)**
+**🎬 AI Video - Text to Video (`/home/tools/to-video`)**
 - Advanced prompt input with multi-line text area
-- Generation options: Aspect ratio, Duration, Style
-- Real-time progress tracking with progress bar
-- Prompt suggestions and generation tips
-- Preview area for generated videos
+- Generation options: Aspect ratio (16:9, 9:16, 1:1), Duration (5s-15s), Style
+- Optional voiceover integration with ElevenLabs
+- Real-time progress tracking with animated progress bar
+- Prompt suggestions and professional generation tips
+- Video preview with download functionality
+
+**🎭 Generate Drama (`/home/generate-drama`)**
+- Specialized drama creation with AI assistance
+- Drama templates: Love Story, Mystery Thriller, Family Drama, Coming of Age
+- Custom settings: Genre, Tone, Setting, Duration
+- Three-act structure generation (Opening, Climax, Resolution)
+- Professional drama writing tips and guidance
+- Video preview and download capabilities
+
+**🖼️ Generate Image (`/home/tools/text2image`)**
+- Dual prompt input (positive + negative prompts)
+- Advanced settings: Style, Aspect ratio, Quality slider
+- Generated images gallery with grid display
+- Style presets and professional generation tips
+- Aspect ratio guides and recommendations
+
+**🎤 Talking Avatar (`/home/tools/talking-avatar`)**
+- Character avatar selection and customization
+- Text input for speech synthesis
+- Voice selection from ElevenLabs voice library
+- Lip sync integration for natural animation
+- Preview and download functionality
+
+**🎪 Train Model (`/home/tools/train-model`)**
+- Custom AI model training interface
+- File upload for training datasets
+- Model type selection (LoRA, DreamBooth, Full Fine-tuning)
+- Training progress tracking with detailed metrics
+- Model download and deployment options
 
 **🎤 Lip Sync (`/home/tools/lip-sync`)**
 - Video file upload with drag-and-drop interface
 - Audio text input for synchronization
-- Voice type selection (Natural, Robotic, Child, Elderly)
+- Voice type selection (Rachel, Drew, Domi, Bella)
 - Progress tracking and preview functionality
-- Language support indicators
-
-**🖼️ Text to Image (`/home/tools/text2image`)**
-- Dual prompt input (positive + negative prompts)
-- Advanced settings: Style, Aspect ratio, Quality slider
-- Generated images gallery display
-- Style presets and generation tips
-- Aspect ratio guides
-
-**🤖 LoRA Models (`/home/tools/lora-list`)**
-- Model gallery with search and category filters
-- Detailed model cards with ratings and download counts
-- Model detail dialogs with trigger words
-- Author information and base model details
-- Download and favorite functionality
+- Language support and quality optimization
 
 **🎥 Short Film Creator (`/home/short-film`)**
 - Film title and genre selection
@@ -447,9 +508,10 @@ npm start
 
 **📋 All Tools (`/home/tools/all`)**
 - Comprehensive tool overview page
-- Featured tools section
+- Featured tools section with Popular badges
 - Category-based tool organization
-- Tool cards with descriptions and links
+- Tool cards with descriptions and direct links
+- Quick access to all AI capabilities
 
 #### 🛠️ **Technical Architecture**
 
@@ -473,16 +535,18 @@ npm start
 - **State Management**: React hooks for component state
 - **API Integration**: Seamless frontend-backend communication
 
-#### 🎯 **URL Structure**
+#### 🎯 **Complete URL Structure**
 ```
 /
-/home/my-library              # Video library/gallery
-/home/tools/all              # All tools overview
-/home/tools/to-video         # Text-to-video generation
-/home/tools/lip-sync         # Lip sync tool
-/home/tools/text2image       # Text-to-image generation
-/home/tools/lora-list        # LoRA models browser
-/home/short-film             # Short film creator
+/home/my-library              # Video library/gallery with search & filters
+/home/tools/all              # All tools overview with Popular badges
+/home/tools/to-video         # AI Video - Text-to-video generation
+/home/generate-drama         # Generate Drama - AI-powered drama creation
+/home/tools/text2image       # Generate Image - Professional image generation
+/home/tools/talking-avatar   # Talking Avatar - Character animation with speech
+/home/tools/train-model      # Train Model - Custom AI model training
+/home/tools/lip-sync         # Lip Sync - Audio-video synchronization
+/home/short-film             # Short Film Creator - Multi-scene film production
 ```
 
 ### Backend Setup
