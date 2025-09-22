@@ -10,6 +10,7 @@ import ToVideo from './pages/ToVideo';
 import AllTools from './pages/AllTools';
 import LipSync from './pages/LipSync';
 import TextToImage from './pages/TextToImage';
+import GenerateDrama from './pages/GenerateDrama';
 // import LoraList from './pages/LoraList';
 import ShortFilm from './pages/ShortFilm';
 import AdminDashboard from './pages/AdminDashboard';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
             <Route path="/home/tools/to-video" element={<ToVideo />} />
             <Route path="/home/tools/lip-sync" element={<LipSync />} />
             <Route path="/home/tools/text2image" element={<TextToImage />} />
+            <Route path="/home/generate-drama" element={<GenerateDrama />} />
             {/* <Route path="/home/tools/lora-list" element={<LoraList />} /> */}
             <Route path="/home/short-film" element={<ShortFilm />} />
             <Route path="/admin" element={<AdminDashboard />} />

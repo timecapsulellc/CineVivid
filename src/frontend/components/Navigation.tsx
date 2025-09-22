@@ -89,6 +89,13 @@ const Navigation: React.FC = () => {
       popular: false
     },
     {
+      text: 'Generate Drama',
+      path: '/home/generate-drama',
+      icon: <Movie sx={{ mr: 1, fontSize: 18 }} />,
+      description: 'Create cinematic short dramas',
+      popular: true
+    },
+    {
       text: 'Short Film Creator',
       path: '/home/short-film',
       icon: <Movie sx={{ mr: 1, fontSize: 18 }} />,
