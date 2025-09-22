@@ -150,6 +150,205 @@ CineVivid is a complete web application built on top of SkyReels-V2, providing a
 
 ---
 
+## 🐳 Docker Deployment
+
+CineVivid includes complete Docker support for easy deployment and scaling.
+
+### Prerequisites
+
+- **Docker** and **Docker Compose** installed
+- **NVIDIA Docker** (for GPU support): `sudo apt install nvidia-docker2`
+- **API Keys** configured in `.env` file
+
+### Quick Start with Docker
+
+1. **Clone and setup:**
+   ```bash
+   git clone https://github.com/timecapsulellc/CineVivid
+   cd CineVivid
+   cp .env.example .env
+   # Edit .env with your actual API keys
+   ```
+
+2. **Start the application:**
+   ```bash
+   # Using the helper script (recommended)
+   ./docker-helper.sh start
+
+   # Or manually with docker-compose
+   docker-compose up --build
+   ```
+
+3. **Access the application:**
+   - Backend API: http://localhost:8001
+   - API Docs: http://localhost:8001/docs
+
+### Docker Commands
+
+#### Using the Helper Script
+```bash
+# Start all services
+./docker-helper.sh start
+
+# View logs
+./docker-helper.sh logs backend
+./docker-helper.sh logs celery_worker
+
+# Check health
+./docker-helper.sh health
+
+# Test API
+./docker-helper.sh test
+
+# Scale workers
+./docker-helper.sh scale 3
+
+# Stop services
+./docker-helper.sh stop
+
+# Cleanup
+./docker-helper.sh cleanup
+```
+
+#### Manual Docker Commands
+```bash
+# Build images
+docker-compose build
+
+# Start services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f backend
+
+# Scale workers
+docker-compose up -d --scale celery_worker=3
+
+# Stop services
+docker-compose down
+
+# Remove volumes (WARNING: deletes data)
+docker-compose down -v
+```
+
+### Docker Architecture
+
+#### Development Setup (`docker-compose.yml`)
+- **Redis**: In-memory database for Celery broker
+- **Backend**: FastAPI application with GPU support
+- **Celery Worker**: Background video processing
+- **Volume Mounts**: Persistent storage for models and videos
+
+#### Production Setup (`docker-compose.prod.yml`)
+- **Nginx**: Load balancer and reverse proxy
+- **Multiple Workers**: Horizontal scaling
+- **Resource Limits**: Memory and GPU constraints
+- **Health Checks**: Automatic service monitoring
+
+### GPU Configuration
+
+#### For NVIDIA GPUs:
+```bash
+# Install NVIDIA Docker
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+
+sudo apt-get update && sudo apt-get install -y nvidia-docker2
+sudo systemctl restart docker
+```
+
+#### Verify GPU Access:
+```bash
+# In container
+docker run --rm --gpus all nvidia/cuda:12.1-base nvidia-smi
+```
+
+### Environment Variables
+
+The Docker setup uses the same `.env` file as local development:
+
+```bash
+# Required
+HUGGINGFACE_TOKEN=hf_xxxxxxxxxxxxxxxxx
+ELEVENLABS_API_KEY=sk_xxxxxxxxxxxxxxxxx
+
+# Optional
+REDIS_URL=redis://redis:6379/0
+BACKEND_PORT=8001
+```
+
+### Troubleshooting Docker
+
+#### Common Issues:
+
+**GPU Not Detected:**
+```bash
+# Check NVIDIA Docker installation
+docker run --rm --gpus all nvidia/cuda:12.1-base nvidia-smi
+
+# Check Docker Compose GPU configuration
+docker-compose config
+```
+
+**Port Conflicts:**
+```bash
+# Change ports in docker-compose.yml
+ports:
+  - "8002:8001"  # Host:Container
+```
+
+**Memory Issues:**
+```bash
+# Monitor resource usage
+./docker-helper.sh status
+
+# Adjust memory limits in docker-compose.yml
+deploy:
+  resources:
+    limits:
+      memory: 64G
+```
+
+**Model Download Issues:**
+```bash
+# Check container logs
+docker-compose logs backend
+
+# Verify API keys in .env
+cat .env
+```
+
+### Production Deployment
+
+For production deployment to cloud platforms:
+
+1. **Build and push images:**
+   ```bash
+   docker build -t cinevivid/backend:latest .
+   docker push cinevivid/backend:latest
+   ```
+
+2. **Use production compose file:**
+   ```bash
+   docker-compose -f docker-compose.prod.yml up -d
+   ```
+
+3. **Set up reverse proxy (nginx):**
+   ```bash
+   # Configure SSL and load balancing
+   # See nginx.conf for example configuration
+   ```
+
+### Performance Optimization
+
+- **GPU Memory**: Monitor with `nvidia-smi`
+- **Worker Scaling**: Add more Celery workers for high load
+- **Model Caching**: Use persistent volumes for downloaded models
+- **Load Balancing**: Use nginx for multiple backend instances
+
+---
+
 ## 🚀 Quickstart
 
 ### Web Application Setup

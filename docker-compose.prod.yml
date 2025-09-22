@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - cinevivid_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  backend:
+    image: cinevivid/backend:latest
+    ports:
+      - "8001:8001"
+    environment:
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8001
+    volumes:
+      - videos_data:/app/src/models/videos
+      - models_data:/app/src/models
+    depends_on:
+      - redis
+    networks:
+      - cinevivid_network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 16G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery_worker:
+    image: cinevivid/backend:latest
+    environment:
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - videos_data:/app/src/models/videos
+      - models_data:/app/src/models
+    depends_on:
+      - redis
+    networks:
+      - cinevivid_network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 16G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: celery -A src.backend.celery_tasks worker --loglevel=info --concurrency=1
+    healthcheck:
+      test: ["CMD", "celery", "-A", "src.backend.celery_tasks", "inspect", "ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - videos_data:/var/www/videos:ro
+    depends_on:
+      - backend
+    networks:
+      - cinevivid_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+volumes:
+  redis_data:
+    driver: local
+  videos_data:
+    driver: local
+  models_data:
+    driver: local
+
+networks:
+  cinevivid_network:
+    driver: bridge
