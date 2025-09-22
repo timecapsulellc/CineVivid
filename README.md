@@ -51,6 +51,105 @@ The demos above showcase 30-second videos generated using our SkyReels-V2 Diffus
 - [ ] Checkpoints of the Step & Guidance Distill Model
 
 
+## 🎬 CineVivid Web Application
+
+CineVivid is a complete web application built on top of SkyReels-V2, providing an intuitive AI-powered interface for video generation with additional features like voiceovers and prompt enhancement.
+
+### Features
+- **Text-to-Video Generation**: Create videos from text prompts using SkyReels-V2
+- **Prompt Enhancement**: AI-powered prompt optimization using Qwen2.5-32B
+- **Voiceover Integration**: ElevenLabs TTS with multiple voice options
+- **Real-time Progress**: Live status updates during generation
+- **Video Preview**: Instant playback of generated content
+- **Responsive UI**: Modern React interface with Material-UI
+
+### Web Application Setup
+
+#### Prerequisites
+- Python 3.10 or higher
+- Node.js 16 or higher
+- FFmpeg (for video processing)
+- Redis (for background tasks)
+- Hugging Face account (for model access)
+- ElevenLabs account (for voiceover)
+
+#### Installation
+
+1. **Clone and setup Python environment**
+   ```bash
+   git clone https://github.com/yourusername/cinevivid-ai.git
+   cd cinevivid-ai
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+2. **Setup Node.js environment**
+   ```bash
+   cd src/frontend
+   npm install
+   cd ../..
+   ```
+
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys (see .env.example for details)
+   ```
+
+#### API Keys Required
+
+1. **Hugging Face Token**
+   - Visit: https://huggingface.co/settings/tokens
+   - Create token with "Read" permissions
+   - Add to `.env`: `HUGGINGFACE_TOKEN=hf_xxxxxxxxxxxxxxxxx`
+
+2. **ElevenLabs API Key**
+   - Visit: https://elevenlabs.io/app/profile
+   - Generate API key
+   - Add to `.env`: `ELEVENLABS_API_KEY=sk_xxxxxxxxxxxxxxxxx`
+
+#### Running the Application
+
+1. **Start Redis** (if not running)
+   ```bash
+   redis-server
+   ```
+
+2. **Start Backend**
+   ```bash
+   source .venv/bin/activate
+   PYTHONPATH=/path/to/project uvicorn src.backend.app:app --reload --port 8001
+   ```
+
+3. **Start Frontend** (in another terminal)
+   ```bash
+   cd src/frontend
+   npm start
+   ```
+
+4. **Access Application**
+   - Frontend: http://localhost:1234
+   - Backend API: http://localhost:8001
+   - API Docs: http://localhost:8001/docs
+
+#### Usage
+
+1. Navigate to "All Tools" → "Text to Video"
+2. Enter a descriptive prompt
+3. Optionally enable voiceover and select voice
+4. Click "Generate Video" and monitor progress
+5. View your AI-generated video with audio
+
+### Security Notes
+
+- **Never commit `.env` file** to version control
+- **API keys are loaded from environment** variables
+- **Configure HTTPS** in production
+- **Implement rate limiting** for production use
+
+---
+
 ## 🚀 Quickstart
 
 ### Web Application Setup

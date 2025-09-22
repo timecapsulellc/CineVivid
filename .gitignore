@@ -16,3 +16,16 @@ dist/
 build/
 *.log
 .DS_Store
+
+# Environment variables (contains sensitive API keys)
+.env
+.env.local
+.env.*.local
+
+# Generated videos and models
+src/models/videos/
+*.mp4
+*.mp3
+
+# Celery beat schedule file
+celerybeat-schedule

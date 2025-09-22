@@ -15,6 +15,8 @@ import {
   LinearProgress,
   Paper,
   Chip,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import { PlayArrow, Settings } from '@mui/icons-material';
 
@@ -27,6 +29,9 @@ const ToVideo: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
+  const [voiceoverText, setVoiceoverText] = useState('');
+  const [voiceId, setVoiceId] = useState('21m00Tcm4TlvDq8ikWAM');
+  const [enableVoiceover, setEnableVoiceover] = useState(false);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -34,15 +39,22 @@ const ToVideo: React.FC = () => {
     setGeneratedVideo(null);
 
     try {
-      const response = await fetch('http://localhost:8000/generate/video', {
+      const requestData: any = {
+        prompt,
+        aspect_ratio: aspectRatio,
+        duration: parseInt(duration),
+        style
+      };
+
+      if (enableVoiceover && voiceoverText.trim()) {
+        requestData.voiceover_text = voiceoverText.trim();
+        requestData.voice_id = voiceId;
+      }
+
+      const response = await fetch('http://localhost:8001/generate/video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          aspect_ratio: aspectRatio,
-          duration: parseInt(duration),
-          style
-        }),
+        body: JSON.stringify(requestData),
       });
 
       if (response.ok) {
@@ -61,7 +73,7 @@ const ToVideo: React.FC = () => {
 
   const pollStatus = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/status/${id}`);
+      const response = await fetch(`http://localhost:8001/status/${id}`);
       const data = await response.json();
 
       setProgress(data.progress || 0);
@@ -161,6 +173,52 @@ const ToVideo: React.FC = () => {
               </Grid>
             </Grid>
 
+            {/* Voiceover Options */}
+            <Box sx={{ mt: 3 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={enableVoiceover}
+                    onChange={(e) => setEnableVoiceover(e.target.checked)}
+                    disabled={isGenerating}
+                  />
+                }
+                label="Add Voiceover (ElevenLabs)"
+              />
+            </Box>
+
+            {enableVoiceover && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+                  Voiceover Settings
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Enter the narration text for your video..."
+                  value={voiceoverText}
+                  onChange={(e) => setVoiceoverText(e.target.value)}
+                  sx={{ mb: 2 }}
+                  disabled={isGenerating}
+                />
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Voice</InputLabel>
+                  <Select
+                    value={voiceId}
+                    label="Voice"
+                    onChange={(e) => setVoiceId(e.target.value)}
+                    disabled={isGenerating}
+                  >
+                    <MenuItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female)</MenuItem>
+                    <MenuItem value="29vD33pQtUPKGSMZhtVx">Drew (Male)</MenuItem>
+                    <MenuItem value="AZnzlk1XvdvUeBnXmlld">Domi (Female)</MenuItem>
+                    <MenuItem value="EXAVITQu4vr4xnSDxMaL">Bella (Female)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
+
             {isGenerating && (
               <Box sx={{ mb: 3 }}>
                 <LinearProgress variant="determinate" value={progress} />
@@ -228,7 +286,7 @@ const ToVideo: React.FC = () => {
                   <video
                     controls
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    src={`http://localhost:8000${generatedVideo}`}
+                    src={`http://localhost:8001${generatedVideo}`}
                   />
                 ) : (
                   <PlayArrow sx={{ fontSize: 48, color: 'grey.500' }} />

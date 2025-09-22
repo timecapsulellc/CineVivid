@@ -15,3 +15,7 @@ numpy>=1.23.5,<2
 xfuser
 decord
 moviepy
+celery
+redis
+elevenlabs
+python-dotenv

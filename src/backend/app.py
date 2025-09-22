@@ -9,6 +9,10 @@ import json
 import asyncio
 from datetime import datetime
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,6 +24,9 @@ videos_dir = os.path.join(os.path.dirname(__file__), "../models/videos")
 os.makedirs(videos_dir, exist_ok=True)
 app.mount("/videos", StaticFiles(directory=videos_dir), name="videos")
 
+# Import Celery task
+from .celery_tasks import generate_video_task
+
 # Global video generator (lazy load)
 video_generator = None
 
@@ -30,34 +37,8 @@ def get_video_generator():
         video_generator = VideoGenerator()
     return video_generator
 
-# Mock data storage (in production, use database)
-videos_db = []
-lora_models_db = [
-    {
-        "id": 1,
-        "name": "Realistic Portrait v2.1",
-        "description": "High-quality realistic portrait generation with natural lighting",
-        "category": "portraits",
-        "author": "SkyReels Team",
-        "downloads": 15420,
-        "rating": 4.8,
-        "tags": ["realistic", "portrait", "photography"],
-        "baseModel": "SDXL 1.0",
-        "triggerWords": "photorealistic, detailed face, natural lighting"
-    },
-    {
-        "id": 2,
-        "name": "Anime Style Pro",
-        "description": "Professional anime and manga style character generation",
-        "category": "anime",
-        "author": "AnimeMaster",
-        "downloads": 8920,
-        "rating": 4.6,
-        "tags": ["anime", "manga", "characters"],
-        "baseModel": "SDXL 1.0",
-        "triggerWords": "anime style, detailed eyes, vibrant colors"
-    }
-]
+# Import data storage
+from .db import videos_db, lora_models_db
 
 # Pydantic models for request/response
 class VideoGenerationRequest(BaseModel):
@@ -142,8 +123,8 @@ async def generate_video(request: VideoGenerationRequest):
 
     videos_db.append(video_data)
 
-    # Simulate async processing
-    asyncio.create_task(process_video_generation(task_id))
+    # Start Celery task
+    generate_video_task.delay(task_id)
 
     return {
         "task_id": task_id,
@@ -315,11 +296,16 @@ async def process_video_generation(task_id: str):
         duration = video_data.get('duration', 5)
         num_frames = duration * 24
 
-        # Generate video
+        # Generate video with optional voiceover
+        voiceover_text = video_data.get('voiceover_text')
+        voice_id = video_data.get('voice_id')
+
         output_path = generator.generate_video(
             prompt=video_data['prompt'],
             num_frames=num_frames,
-            fps=24
+            fps=24,
+            voiceover_text=voiceover_text,
+            voice_id=voice_id
         )
 
         # Update status

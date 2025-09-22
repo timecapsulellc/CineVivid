@@ -3,6 +3,8 @@ import sys
 import torch
 import imageio
 from diffusers.utils import load_image
+import subprocess
+from typing import Optional
 
 # Add path to skyreels_v2_infer
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
@@ -13,6 +15,8 @@ try:
     from skyreels_v2_infer.pipelines import PromptEnhancer
 except ImportError:
     PromptEnhancer = None
+
+from .voiceover_generator import VoiceoverGenerator
 
 class VideoGenerator:
     def __init__(self, model_id="Skywork/SkyReels-V2-DF-1.3B-540P", resolution="540P", device="auto"):
@@ -48,12 +52,15 @@ class VideoGenerator:
             print(f"Prompt enhancer not available: {e}")
             self.prompt_enhancer = None
 
+        # Initialize voiceover generator
+        self.voiceover_generator = VoiceoverGenerator()
+
     def enhance_prompt(self, prompt):
         if self.prompt_enhancer:
             return self.prompt_enhancer(prompt)
         return prompt
 
-    def generate_video(self, prompt, num_frames=97, fps=24, seed=None, guidance_scale=6.0, image=None):
+    def generate_video(self, prompt, num_frames=97, fps=24, seed=None, guidance_scale=6.0, image=None, voiceover_text=None, voice_id=None):
         if self.resolution == "540P":
             height, width = 544, 960
         elif self.resolution == "720P":
@@ -100,6 +107,40 @@ class VideoGenerator:
         video_filename = f"{prompt[:50].replace('/', '').replace(' ', '_')}_{seed}_{current_time}.mp4"
         output_path = os.path.join(videos_dir, video_filename)
 
-        imageio.mimwrite(output_path, video_frames, fps=fps, quality=8, output_params=["-loglevel", "error"])
+        # Create video without audio first
+        temp_video_path = output_path.replace('.mp4', '_temp.mp4')
+        imageio.mimwrite(temp_video_path, video_frames, fps=fps, quality=8, output_params=["-loglevel", "error"])
+
+        # Add voiceover if requested
+        if voiceover_text and self.voiceover_generator:
+            audio_path = self.voiceover_generator.generate_voiceover(voiceover_text, voice_id or "21m00Tcm4TlvDq8ikWAM")
+            if audio_path:
+                # Merge video and audio using FFmpeg
+                try:
+                    result = subprocess.run([
+                        'ffmpeg', '-y', '-i', temp_video_path, '-i', audio_path,
+                        '-c:v', 'copy', '-c:a', 'aac', '-shortest', output_path
+                    ], capture_output=True, text=True)
+
+                    if result.returncode == 0:
+                        print(f"Successfully added voiceover to video: {output_path}")
+                        # Clean up temp files
+                        os.remove(temp_video_path)
+                        os.remove(audio_path)
+                    else:
+                        print(f"FFmpeg failed: {result.stderr}")
+                        # Fallback to video without audio
+                        os.rename(temp_video_path, output_path)
+                        os.remove(audio_path)
+                except Exception as e:
+                    print(f"Failed to merge audio: {e}")
+                    # Fallback to video without audio
+                    os.rename(temp_video_path, output_path)
+            else:
+                # No audio generated, use video as-is
+                os.rename(temp_video_path, output_path)
+        else:
+            # No voiceover requested, use video as-is
+            os.rename(temp_video_path, output_path)
 
         return output_path

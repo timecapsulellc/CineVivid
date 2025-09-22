@@ -123,7 +123,16 @@ const LoraList: React.FC = () => {
       baseModel: 'SDXL 1.0',
       triggerWords: 'product photography, professional lighting, clean background'
     }
-  ];
+  ]);
+
+} catch (error) {
+  console.error('Failed to fetch LoRA models:', error);
+  setLoraModels([]);
+}
+};
+
+    fetchLoraModels();
+  }, []);
 
   const categories = [
     { value: 'all', label: 'All Models' },
