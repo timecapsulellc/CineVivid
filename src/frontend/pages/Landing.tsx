@@ -24,6 +24,7 @@ import {
   Image,
   Mic,
   Movie,
+  Edit,
 } from '@mui/icons-material';
 import Navigation from '../components/Navigation';
 
@@ -31,61 +32,95 @@ const Landing: React.FC = () => {
   const recentCreations = [
     {
       id: 1,
-      title: 'A cat playing in a garden',
-      thumbnail: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=300&fit=crop',
+      title: '🚀 Futuristic Cityscape Animation',
+      thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=400&h=300&fit=crop',
       duration: '00:15',
-      views: '2.1K',
-      likes: 89
+      views: '12.1K',
+      likes: 892,
+      creator: 'Alex Chen'
     },
     {
       id: 2,
-      title: 'Sunset over mountains',
+      title: '🌅 Majestic Mountain Sunrise',
       thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop',
       duration: '00:20',
-      views: '5.2K',
-      likes: 234
+      views: '25.2K',
+      likes: 1234,
+      creator: 'Sarah Mitchell'
     },
     {
       id: 3,
-      title: 'City lights at night',
+      title: '🏙️ Neon Night City Exploration',
       thumbnail: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=400&h=300&fit=crop',
       duration: '00:12',
-      views: '1.8K',
-      likes: 156
+      views: '18.8K',
+      likes: 756,
+      creator: 'Marcus Rodriguez'
     },
     {
       id: 4,
-      title: 'Ocean waves',
+      title: '🌊 Tranquil Ocean Waves',
       thumbnail: 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=400&h=300&fit=crop',
       duration: '00:18',
-      views: '3.7K',
-      likes: 198
+      views: '33.7K',
+      likes: 1456,
+      creator: 'Emma Thompson'
+    },
+    {
+      id: 5,
+      title: '🎭 Dramatic Theater Performance',
+      thumbnail: 'https://images.unsplash.com/photo-1489599735734-79b4dfe3b22a?w=400&h=300&fit=crop',
+      duration: '00:22',
+      views: '9.4K',
+      likes: 623,
+      creator: 'David Park'
+    },
+    {
+      id: 6,
+      title: '🎨 Abstract Art Animation',
+      thumbnail: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=300&fit=crop',
+      duration: '00:14',
+      views: '15.6K',
+      likes: 987,
+      creator: 'Lisa Wang'
     }
   ];
 
   const features = [
     {
       icon: <VideoLibrary sx={{ fontSize: 48, color: 'primary.main' }} />,
-      title: 'Text to Video',
-      description: 'Transform your ideas into stunning videos with AI',
+      title: '🎬 Text to Video',
+      description: 'Transform your wildest ideas into cinematic masterpieces with AI-powered video generation',
       popular: true
     },
     {
       icon: <Image sx={{ fontSize: 48, color: 'primary.main' }} />,
-      title: 'Image to Video',
-      description: 'Bring static images to life with motion',
+      title: '🎭 Image to Video',
+      description: 'Bring static photos to life with natural motion, perfect for social media magic',
       popular: true
     },
     {
       icon: <Mic sx={{ fontSize: 48, color: 'primary.main' }} />,
-      title: 'Voiceover & Lip Sync',
-      description: 'Add professional voiceovers and perfect lip sync',
+      title: '🎤 Voiceover & Lip Sync',
+      description: 'Add professional voiceovers and perfect lip sync with 100+ AI voices',
       popular: true
     },
     {
       icon: <Movie sx={{ fontSize: 48, color: 'primary.main' }} />,
-      title: 'Short Film Creator',
-      description: 'Craft complete short films from script to screen',
+      title: '🎪 Short Film Creator',
+      description: 'Craft complete short films from script to screen with AI scene planning',
+      popular: false
+    },
+    {
+      icon: <PlayArrow sx={{ fontSize: 48, color: 'primary.main' }} />,
+      title: '🎭 Talking Avatar',
+      description: 'Create animated avatars that speak your text with natural expressions',
+      popular: false
+    },
+    {
+      icon: <Edit sx={{ fontSize: 48, color: 'primary.main' }} />,
+      title: '✂️ Video Editor',
+      description: 'Trim, add text overlays, and apply transitions to perfect your videos',
       popular: false
     }
   ];
@@ -484,31 +519,51 @@ const Landing: React.FC = () => {
             {[
               {
                 name: 'Sarah Chen',
-                role: 'Content Creator',
+                role: '🎬 Content Creator',
                 avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
-                content: 'CineVivid transformed my content creation workflow. What used to take hours now takes minutes. The AI quality is incredible!',
-                rating: 5
+                content: '🚀 CineVivid transformed my content creation workflow! What used to take hours now takes minutes. The AI quality is absolutely incredible! 🎨',
+                rating: 5,
+                company: 'YouTube Creator'
               },
               {
                 name: 'Marcus Johnson',
-                role: 'Marketing Director',
+                role: '📈 Marketing Director',
                 avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-                content: 'Our marketing team creates 10x more video content now. The camera director feature gives us cinematic quality every time.',
-                rating: 5
+                content: '💼 Our marketing team creates 10x more video content now! The camera director feature gives us cinematic quality every single time. Game-changer! 🎯',
+                rating: 5,
+                company: 'TechCorp Inc.'
               },
               {
                 name: 'Elena Rodriguez',
-                role: 'Filmmaker',
+                role: '🎭 Filmmaker',
                 avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-                content: 'As a filmmaker, I was skeptical about AI video tools. CineVivid proved me wrong. The short film creator is a game-changer.',
-                rating: 5
+                content: '🎪 As a filmmaker, I was skeptical about AI video tools. CineVivid proved me completely wrong! The short film creator is an absolute game-changer. 🎬',
+                rating: 5,
+                company: 'Independent Films'
               },
               {
                 name: 'David Kim',
-                role: 'Social Media Manager',
+                role: '📱 Social Media Manager',
                 avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-                content: 'The talking avatar feature with voice cloning is perfect for our brand videos. Saves us thousands in production costs.',
-                rating: 5
+                content: '🎤 The talking avatar feature with voice cloning is perfect for our brand videos! Saves us thousands in production costs. Highly recommend! 💰',
+                rating: 5,
+                company: 'SocialBoost Agency'
+              },
+              {
+                name: 'Lisa Wang',
+                role: '🎨 Motion Designer',
+                avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
+                content: '✨ The video editor with text overlays and transitions is a dream come true! Professional quality results in minutes, not hours. Love it! 🎨',
+                rating: 5,
+                company: 'Creative Studio'
+              },
+              {
+                name: 'Alex Thompson',
+                role: '📊 Data Analyst',
+                avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+                content: '📈 Even as a non-creative professional, I can create stunning videos for presentations! The templates are amazing and so easy to use. 🤩',
+                rating: 5,
+                company: 'Analytics Pro'
               }
             ].map((testimonial, index) => (
               <Grid item xs={12} md={6} key={index}>

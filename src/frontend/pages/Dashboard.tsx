@@ -25,6 +25,8 @@ import {
   Share,
   Delete,
   Add,
+  Favorite,
+  Visibility,
 } from '@mui/icons-material';
 
 const Dashboard: React.FC = () => {
@@ -33,31 +35,70 @@ const Dashboard: React.FC = () => {
   const [videos, setVideos] = useState([
     {
       id: 1,
-      title: 'Majestic Eagle Soaring',
-      thumbnail: '/placeholder.jpg',
+      title: '🦅 Majestic Eagle Soaring',
+      thumbnail: 'https://images.unsplash.com/photo-1452570053594-1b985d6ea890?w=400&h=300&fit=crop',
       status: 'completed',
       duration: '5s',
       createdAt: '2024-01-15',
-      prompt: 'A majestic eagle soaring through mountain peaks'
+      prompt: 'A majestic eagle soaring through mountain peaks at sunset',
+      likes: 42,
+      views: '1.2K'
     },
     {
       id: 2,
-      title: 'Urban Cityscape',
-      thumbnail: '/placeholder.jpg',
+      title: '🏙️ Urban Cityscape Dreams',
+      thumbnail: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=400&h=300&fit=crop',
       status: 'completed',
       duration: '10s',
       createdAt: '2024-01-14',
-      prompt: 'Urban cityscape at night with neon lights'
+      prompt: 'Urban cityscape at night with neon lights and flying cars',
+      likes: 89,
+      views: '3.5K'
     },
     {
       id: 3,
-      title: 'Butterfly Transformation',
-      thumbnail: '/placeholder.jpg',
+      title: '🦋 Butterfly Transformation',
+      thumbnail: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=300&fit=crop',
       status: 'processing',
       duration: '8s',
       createdAt: '2024-01-13',
-      prompt: 'Butterfly emerging from chrysalis'
+      prompt: 'Butterfly emerging from chrysalis in a magical forest',
+      likes: 23,
+      views: '856'
     },
+    {
+      id: 4,
+      title: '🌊 Ocean Waves Serenity',
+      thumbnail: 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=400&h=300&fit=crop',
+      status: 'completed',
+      duration: '12s',
+      createdAt: '2024-01-12',
+      prompt: 'Tranquil ocean waves with golden sunset reflections',
+      likes: 156,
+      views: '7.8K'
+    },
+    {
+      id: 5,
+      title: '🚀 Futuristic Space Station',
+      thumbnail: 'https://images.unsplash.com/photo-1446776653964-20c1d3a81b06?w=400&h=300&fit=crop',
+      status: 'completed',
+      duration: '15s',
+      createdAt: '2024-01-11',
+      prompt: 'Futuristic space station orbiting Earth with stunning views',
+      likes: 203,
+      views: '12.4K'
+    },
+    {
+      id: 6,
+      title: '🎭 Theater Performance',
+      thumbnail: 'https://images.unsplash.com/photo-1489599735734-79b4dfe3b22a?w=400&h=300&fit=crop',
+      status: 'failed',
+      duration: '0s',
+      createdAt: '2024-01-10',
+      prompt: 'Dramatic theater performance with spotlights and curtains',
+      likes: 0,
+      views: '0'
+    }
   ]);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -181,6 +222,20 @@ const Dashboard: React.FC = () => {
                 <Typography variant="h6" component="h3" gutterBottom noWrap>
                   {video.title}
                 </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Visibility sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {video.views}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Favorite sx={{ fontSize: 16, color: 'error.main' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {video.likes}
+                    </Typography>
+                  </Box>
+                </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   {video.duration} • {video.createdAt}
                 </Typography>
