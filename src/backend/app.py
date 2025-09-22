@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -7,17 +7,23 @@ import os
 import uuid
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
+# Import authentication
+from .auth import (
+    authenticate_user, create_access_token, get_current_user,
+    deduct_credits, get_user_credits, ACCESS_TOKEN_EXPIRE_MINUTES
+)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SkyReels-V2 API", version="1.0.0")
+app = FastAPI(title="CineVivid API", version="1.0.0")
 
 # Mount static files for videos
 videos_dir = os.path.join(os.path.dirname(__file__), "../models/videos")
@@ -40,12 +46,24 @@ def get_video_generator():
 # Import data storage
 from .db import videos_db, lora_models_db
 
+# Import prompt enhancer
+try:
+    from ...skyreels_v2_infer.pipelines.prompt_enhancer import PromptEnhancer
+    prompt_enhancer = PromptEnhancer()
+except ImportError:
+    prompt_enhancer = None
+    logger.warning("Prompt enhancer not available")
+
 # Pydantic models for request/response
 class VideoGenerationRequest(BaseModel):
     prompt: str
     aspect_ratio: Optional[str] = "16:9"
     duration: Optional[int] = 5
     style: Optional[str] = "cinematic"
+
+class PromptEnhancementRequest(BaseModel):
+    prompt: str
+    context: Optional[Dict[str, Any]] = None
 
 class ImageGenerationRequest(BaseModel):
     prompt: str
@@ -63,6 +81,13 @@ class ShortFilmRequest(BaseModel):
     title: str
     genre: str
     scenes: List[Dict[str, Any]]
+
+class TalkingAvatarRequest(BaseModel):
+    text: str
+    voice_id: str
+    avatar_id: str
+    speed: Optional[float] = 1.0
+    pitch: Optional[int] = 0
 
 # CORS middleware (in production, configure properly)
 from fastapi.middleware.cors import CORSMiddleware
@@ -233,6 +258,39 @@ async def generate_short_film(request: ShortFilmRequest):
         "message": "Short film generation started"
     }
 
+# Talking Avatar Generation
+@app.post("/generate/talking-avatar")
+async def generate_talking_avatar(request: TalkingAvatarRequest):
+    """Generate talking avatar video"""
+    task_id = str(uuid.uuid4())
+
+    # Mock talking avatar generation
+    video_data = {
+        "id": len(videos_db) + 1,
+        "task_id": task_id,
+        "type": "talking_avatar",
+        "title": f"Talking Avatar {len(videos_db) + 1}",
+        "text": request.text,
+        "voice_id": request.voice_id,
+        "avatar_id": request.avatar_id,
+        "speed": request.speed,
+        "pitch": request.pitch,
+        "status": "processing",
+        "created_at": datetime.now().isoformat(),
+        "thumbnail": "/placeholder.jpg"
+    }
+
+    videos_db.append(video_data)
+
+    # Simulate async processing
+    asyncio.create_task(process_talking_avatar_generation(task_id))
+
+    return {
+        "task_id": task_id,
+        "status": "processing",
+        "message": "Talking avatar generation started"
+    }
+
 # LoRA Models Endpoints
 @app.get("/lora-models")
 async def get_lora_models(search: Optional[str] = None, category: Optional[str] = None):
@@ -358,6 +416,41 @@ async def process_short_film_generation(task_id: str):
             film['progress'] = 100
             film['result'] = f'/videos/film_{task_id}.mp4'
             break
+
+async def process_talking_avatar_generation(task_id: str):
+    """Mock talking avatar processing"""
+    await asyncio.sleep(6)
+
+    # Update talking avatar status
+    for avatar in videos_db:
+        if avatar.get('task_id') == task_id:
+            avatar['status'] = 'completed'
+            avatar['progress'] = 100
+            avatar['result'] = f'/videos/avatar_{task_id}.mp4'
+            break
+
+# Prompt Enhancement
+@app.post("/enhance/prompt")
+async def enhance_prompt(request: PromptEnhancementRequest):
+    """Enhance a prompt using AI for better video generation results"""
+    if not prompt_enhancer:
+        raise HTTPException(status_code=503, detail="Prompt enhancer not available")
+
+    try:
+        if request.context:
+            enhanced_prompt = prompt_enhancer.enhance_with_context(request.prompt, request.context)
+        else:
+            enhanced_prompt = prompt_enhancer(request.prompt)
+
+        return {
+            "original_prompt": request.prompt,
+            "enhanced_prompt": enhanced_prompt,
+            "improvement": len(enhanced_prompt) > len(request.prompt)
+        }
+
+    except Exception as e:
+        logger.error(f"Prompt enhancement failed: {e}")
+        raise HTTPException(status_code=500, detail="Prompt enhancement failed")
 
 # Health check
 @app.get("/health")

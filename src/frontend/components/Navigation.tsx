@@ -54,59 +54,59 @@ const Navigation: React.FC = () => {
 
   const toolsItems = [
     {
-      text: 'Text to Video',
+      text: 'AI Video',
       path: '/home/tools/to-video',
       icon: <VideoLibrary sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Transform ideas into vibrant videos',
+      description: 'Transform text prompts into cinematic videos',
       popular: true
     },
     {
-      text: 'Image to Video',
-      path: '/home/tools/image-to-video',
+      text: 'AI Drama',
+      path: '/home/generate-drama',
+      icon: <Movie sx={{ mr: 1, fontSize: 18 }} />,
+      description: 'Create compelling short dramas and stories',
+      popular: true
+    },
+    {
+      text: 'Generate Image',
+      path: '/home/tools/text2image',
       icon: <Image sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Animate static images',
+      description: 'Generate stunning images from text descriptions',
       popular: true
     },
     {
       text: 'Talking Avatar',
       path: '/home/tools/talking-avatar',
       icon: <PlayArrow sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Create animated avatars that speak',
+      description: 'Create animated avatars that speak naturally',
       popular: true
+    },
+    {
+      text: 'Image to Video',
+      path: '/home/tools/image-to-video',
+      icon: <Image sx={{ mr: 1, fontSize: 18 }} />,
+      description: 'Bring static images to life with motion',
+      popular: false
     },
     {
       text: 'Lip Sync',
       path: '/home/tools/lip-sync',
       icon: <Mic sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Sync audio with video',
+      description: 'Perfect lip synchronization for videos',
       popular: false
     },
     {
-      text: 'Text to Image',
-      path: '/home/tools/text2image',
-      icon: <Image sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Generate images from text',
+      text: 'Train Model',
+      path: '/home/tools/train-model',
+      icon: <SmartToy sx={{ mr: 1, fontSize: 18 }} />,
+      description: 'Train custom AI models for your content',
       popular: false
-    },
-    {
-      text: 'Generate Drama',
-      path: '/home/generate-drama',
-      icon: <Movie sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Create cinematic short dramas',
-      popular: true
     },
     {
       text: 'Short Film Creator',
       path: '/home/short-film',
       icon: <Movie sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Craft complete short films',
-      popular: false
-    },
-    {
-      text: 'LoRA Models',
-      path: '/home/tools/lora-list',
-      icon: <SmartToy sx={{ mr: 1, fontSize: 18 }} />,
-      description: 'Browse custom-trained models',
+      description: 'Craft complete short films from scripts',
       popular: false
     },
   ];

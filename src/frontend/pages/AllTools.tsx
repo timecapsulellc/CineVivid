@@ -18,6 +18,8 @@ import {
   Movie,
   PlayArrow,
   SmartToy,
+  Collections,
+  Edit,
 } from '@mui/icons-material';
 
 const AllTools: React.FC = () => {
@@ -80,6 +82,26 @@ const AllTools: React.FC = () => {
       image: 'https://static.skyreels.ai/playlet_home%2Fcover%2F27877873258262-1742367078.jpeg',
       path: '/home/tools/talking-avatar',
       category: 'Animation',
+      featured: true
+    },
+    {
+      id: 'templates',
+      title: 'Video Templates',
+      description: 'Browse and use professionally designed video templates',
+      icon: <Collections sx={{ fontSize: 40, color: 'primary.main' }} />,
+      image: 'https://static.skyreels.ai/playlet_home%2Fcover%2F27878128085602-1742383005.jpg',
+      path: '/home/templates',
+      category: 'Templates',
+      featured: true
+    },
+    {
+      id: 'video-editor',
+      title: 'Video Editor',
+      description: 'Trim, add text overlays, and apply transitions to your videos',
+      icon: <Edit sx={{ fontSize: 40, color: 'primary.main' }} />,
+      image: 'https://static.skyreels.ai/playlet_home%2Fcover%2F27877873258262-1742367078.jpeg',
+      path: '/home/tools/video-editor',
+      category: 'Editing',
       featured: false
     }
   ];

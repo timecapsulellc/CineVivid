@@ -19,6 +19,7 @@ import {
   FormControlLabel,
 } from '@mui/material';
 import { PlayArrow, Settings } from '@mui/icons-material';
+import CameraDirector from '../components/CameraDirector';
 
 const ToVideo: React.FC = () => {
   const [prompt, setPrompt] = useState('');
@@ -33,6 +34,12 @@ const ToVideo: React.FC = () => {
   const [voiceId, setVoiceId] = useState('21m00Tcm4TlvDq8ikWAM');
   const [enableVoiceover, setEnableVoiceover] = useState(false);
 
+  // Camera Director state
+  const [shotType, setShotType] = useState('medium');
+  const [cameraMovement, setCameraMovement] = useState('static');
+  const [cameraDuration, setCameraDuration] = useState(5);
+  const [cameraAngle, setCameraAngle] = useState('eye-level');
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     setProgress(0);
@@ -43,7 +50,10 @@ const ToVideo: React.FC = () => {
         prompt,
         aspect_ratio: aspectRatio,
         duration: parseInt(duration),
-        style
+        style,
+        shot_type: shotType,
+        camera_movement: cameraMovement,
+        camera_angle: cameraAngle
       };
 
       if (enableVoiceover && voiceoverText.trim()) {
@@ -260,6 +270,20 @@ const ToVideo: React.FC = () => {
                 </FormControl>
               </Paper>
             )}
+
+            {/* Camera Director */}
+            <CameraDirector
+              onShotTypeChange={setShotType}
+              onCameraMovementChange={setCameraMovement}
+              onDurationChange={setCameraDuration}
+              onAngleChange={setCameraAngle}
+              initialValues={{
+                shotType,
+                cameraMovement,
+                duration: cameraDuration,
+                angle: cameraAngle
+              }}
+            />
 
             {isGenerating && (
               <Box sx={{ mb: 4 }}>
