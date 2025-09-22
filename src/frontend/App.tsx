@@ -20,29 +20,17 @@ const App: React.FC = () => {
       <CssBaseline />
       <Router>
         <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
+          <Navigation />
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/home/*" element={
-              <>
-                <Navigation />
-                <Routes>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/my-library" element={<Dashboard />} />
-                  <Route path="/tools/all" element={<AllTools />} />
-                  <Route path="/tools/to-video" element={<ToVideo />} />
-                  <Route path="/tools/lip-sync" element={<LipSync />} />
-                  <Route path="/tools/text2image" element={<TextToImage />} />
-                  {/* <Route path="/tools/lora-list" element={<LoraList />} /> */}
-                  <Route path="/short-film" element={<ShortFilm />} />
-                </Routes>
-              </>
-            } />
-            <Route path="/admin" element={
-              <>
-                <Navigation />
-                <AdminDashboard />
-              </>
-            } />
+            <Route path="/home/my-library" element={<Dashboard />} />
+            <Route path="/home/tools/all" element={<AllTools />} />
+            <Route path="/home/tools/to-video" element={<ToVideo />} />
+            <Route path="/home/tools/lip-sync" element={<LipSync />} />
+            <Route path="/home/tools/text2image" element={<TextToImage />} />
+            {/* <Route path="/home/tools/lora-list" element={<LoraList />} /> */}
+            <Route path="/home/short-film" element={<ShortFilm />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </Box>
       </Router>

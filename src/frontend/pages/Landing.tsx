@@ -99,9 +99,6 @@ const Landing: React.FC = () => {
 
   return (
     <Box>
-      {/* Navigation */}
-      <Navigation />
-
       {/* Hero Section */}
       <Box
         sx={{
