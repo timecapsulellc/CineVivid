@@ -17,7 +17,7 @@ load_dotenv()
 # Import authentication
 from .auth import (
     authenticate_user, create_access_token, get_current_user,
-    deduct_credits, get_user_credits, ACCESS_TOKEN_EXPIRE_MINUTES
+    deduct_credits, get_user_credits, add_credits, ACCESS_TOKEN_EXPIRE_MINUTES
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +45,12 @@ def get_video_generator():
 
 # Import data storage
 from .db import videos_db, lora_models_db
+
+# Import audio library
+from .audio_library import (
+    get_sound_effects, get_music_tracks, get_audio_categories,
+    get_audio_by_id, search_audio
+)
 
 # Import prompt enhancer
 try:
@@ -88,6 +94,19 @@ class TalkingAvatarRequest(BaseModel):
     avatar_id: str
     speed: Optional[float] = 1.0
     pitch: Optional[int] = 0
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    tier: Optional[str] = "free"
+
+class CreditPurchaseRequest(BaseModel):
+    amount: int
+    tier: Optional[str] = None
 
 # CORS middleware (in production, configure properly)
 from fastapi.middleware.cors import CORSMiddleware
@@ -451,6 +470,118 @@ async def enhance_prompt(request: PromptEnhancementRequest):
     except Exception as e:
         logger.error(f"Prompt enhancement failed: {e}")
         raise HTTPException(status_code=500, detail="Prompt enhancement failed")
+
+# Authentication Endpoints
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """User login"""
+    user = authenticate_user(request.email, request.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    access_token = create_access_token(data={"sub": user["email"]})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "tier": user["tier"],
+            "credits": user["credits"]
+        }
+    }
+
+@app.post("/auth/register")
+async def register(request: RegisterRequest):
+    """User registration"""
+    try:
+        user = register_user(request.email, request.password, request.tier)
+        access_token = create_access_token(data={"sub": user["email"]})
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "tier": user["tier"],
+                "credits": user["credits"]
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.get("/auth/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user information"""
+    return {
+        "id": current_user["id"],
+        "email": current_user["email"],
+        "tier": current_user["tier"],
+        "credits": current_user["credits"],
+        "created_at": current_user["created_at"]
+    }
+
+# Credit System Endpoints
+@app.get("/credits")
+async def get_credits(current_user: dict = Depends(get_current_user)):
+    """Get user credit balance"""
+    return {
+        "credits": get_user_credits(current_user["email"]),
+        "tier": current_user["tier"]
+    }
+
+@app.post("/credits/purchase")
+async def purchase_credits(request: CreditPurchaseRequest, current_user: dict = Depends(get_current_user)):
+    """Purchase credits or upgrade tier"""
+    if request.tier:
+        # Tier upgrade
+        if upgrade_user_tier(current_user["email"], request.tier):
+            return {"message": f"Successfully upgraded to {request.tier} tier"}
+        else:
+            raise HTTPException(status_code=400, detail="Invalid tier or upgrade failed")
+    else:
+        # Credit purchase
+        if add_credits(current_user["email"], request.amount):
+            return {"message": f"Successfully added {request.amount} credits"}
+        else:
+            raise HTTPException(status_code=400, detail="Credit purchase failed")
+
+@app.get("/pricing")
+async def get_pricing():
+    """Get pricing information"""
+    from .auth import get_pricing_info
+    return {"tiers": get_pricing_info()}
+
+# Audio Library Endpoints
+@app.get("/audio/sound-effects")
+async def get_sound_effects_endpoint(category: Optional[str] = None, search: Optional[str] = None):
+    """Get sound effects library"""
+    return {"sound_effects": get_sound_effects(category, search)}
+
+@app.get("/audio/music")
+async def get_music_tracks_endpoint(category: Optional[str] = None, mood: Optional[str] = None, search: Optional[str] = None):
+    """Get music tracks library"""
+    return {"music": get_music_tracks(category, mood, search)}
+
+@app.get("/audio/categories")
+async def get_audio_categories_endpoint():
+    """Get audio categories"""
+    return get_audio_categories()
+
+@app.get("/audio/{audio_id}")
+async def get_audio_by_id_endpoint(audio_id: str):
+    """Get audio file by ID"""
+    audio = get_audio_by_id(audio_id)
+    if not audio:
+        raise HTTPException(status_code=404, detail="Audio not found")
+    return audio
+
+@app.get("/audio/search")
+async def search_audio_endpoint(q: str, type: Optional[str] = "all"):
+    """Search audio files"""
+    return {"results": search_audio(q, type)}
 
 # Health check
 @app.get("/health")

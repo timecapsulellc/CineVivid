@@ -454,6 +454,105 @@ const Landing: React.FC = () => {
         </Container>
       </Box>
 
+      {/* Testimonials Section */}
+      <Box sx={{ py: 10 }}>
+        <Container maxWidth="lg">
+          <Typography
+            variant="h2"
+            sx={{
+              textAlign: 'center',
+              mb: 3,
+              fontWeight: 800,
+            }}
+          >
+            Loved by Creators Worldwide
+          </Typography>
+          <Typography
+            variant="h5"
+            sx={{
+              textAlign: 'center',
+              mb: 8,
+              color: 'text.secondary',
+              maxWidth: 600,
+              mx: 'auto',
+            }}
+          >
+            See what creators are saying about CineVivid
+          </Typography>
+
+          <Grid container spacing={4}>
+            {[
+              {
+                name: 'Sarah Chen',
+                role: 'Content Creator',
+                avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
+                content: 'CineVivid transformed my content creation workflow. What used to take hours now takes minutes. The AI quality is incredible!',
+                rating: 5
+              },
+              {
+                name: 'Marcus Johnson',
+                role: 'Marketing Director',
+                avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+                content: 'Our marketing team creates 10x more video content now. The camera director feature gives us cinematic quality every time.',
+                rating: 5
+              },
+              {
+                name: 'Elena Rodriguez',
+                role: 'Filmmaker',
+                avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
+                content: 'As a filmmaker, I was skeptical about AI video tools. CineVivid proved me wrong. The short film creator is a game-changer.',
+                rating: 5
+              },
+              {
+                name: 'David Kim',
+                role: 'Social Media Manager',
+                avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+                content: 'The talking avatar feature with voice cloning is perfect for our brand videos. Saves us thousands in production costs.',
+                rating: 5
+              }
+            ].map((testimonial, index) => (
+              <Grid item xs={12} md={6} key={index}>
+                <Card
+                  sx={{
+                    p: 3,
+                    height: '100%',
+                    borderRadius: 3,
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      transition: 'transform 0.3s ease',
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', mb: 2 }}>
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} sx={{ color: 'warning.main', fontSize: 20 }} />
+                    ))}
+                  </Box>
+                  <Typography variant="body1" sx={{ mb: 3, fontStyle: 'italic', lineHeight: 1.6 }}>
+                    "{testimonial.content}"
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Avatar
+                      src={testimonial.avatar}
+                      sx={{ width: 48, height: 48, mr: 2 }}
+                    />
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        {testimonial.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        {testimonial.role}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
       {/* CTA Section */}
       <Box
         sx={{
