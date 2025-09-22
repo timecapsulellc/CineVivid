@@ -11,8 +11,12 @@ from diffusers.image_processor import PipelineImageInput
 from diffusers.utils.torch_utils import randn_tensor
 from diffusers.video_processor import VideoProcessor
 from tqdm import tqdm
-import decord
-from decord import VideoReader
+try:
+    import decord
+    from decord import VideoReader
+    DECORD_AVAILABLE = True
+except ImportError:
+    DECORD_AVAILABLE = False
 
 from ..modules import get_text_encoder
 from ..modules import get_transformer

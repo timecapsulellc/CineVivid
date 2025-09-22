@@ -25,24 +25,16 @@ const ToVideo: React.FC = () => {
   const [style, setStyle] = useState('realistic');
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [generatedVideo, setGeneratedVideo] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setProgress(0);
+    setGeneratedVideo(null);
 
     try {
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 500);
-
-      const response = await fetch('/generate/video', {
+      const response = await fetch('http://localhost:8000/generate/video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -53,19 +45,42 @@ const ToVideo: React.FC = () => {
         }),
       });
 
-      clearInterval(progressInterval);
-      setProgress(100);
-
       if (response.ok) {
-        setTimeout(() => {
-          setIsGenerating(false);
-          setProgress(0);
-        }, 1000);
+        const data = await response.json();
+        setTaskId(data.task_id);
+
+        // Poll for status
+        pollStatus(data.task_id);
       }
     } catch (error) {
       console.error('Generation failed:', error);
       setIsGenerating(false);
       setProgress(0);
+    }
+  };
+
+  const pollStatus = async (id: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/status/${id}`);
+      const data = await response.json();
+
+      setProgress(data.progress || 0);
+
+      if (data.status === 'completed') {
+        setIsGenerating(false);
+        setProgress(100);
+        setGeneratedVideo(data.result);
+      } else if (data.status === 'failed') {
+        setIsGenerating(false);
+        setProgress(0);
+        alert('Generation failed: ' + (data.error || 'Unknown error'));
+      } else {
+        // Continue polling
+        setTimeout(() => pollStatus(id), 2000);
+      }
+    } catch (error) {
+      console.error('Status check failed:', error);
+      setTimeout(() => pollStatus(id), 2000);
     }
   };
 
@@ -209,10 +224,18 @@ const ToVideo: React.FC = () => {
                   mb: 2
                 }}
               >
-                <PlayArrow sx={{ fontSize: 48, color: 'grey.500' }} />
+                {generatedVideo ? (
+                  <video
+                    controls
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    src={`http://localhost:8000${generatedVideo}`}
+                  />
+                ) : (
+                  <PlayArrow sx={{ fontSize: 48, color: 'grey.500' }} />
+                )}
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Your generated video will appear here
+                {generatedVideo ? 'Your generated video' : 'Your generated video will appear here'}
               </Typography>
             </CardContent>
           </Card>

@@ -42,11 +42,9 @@ const LoraList: React.FC = () => {
         if (response.ok) {
           const data = await response.json();
           setLoraModels(data.models);
-        }
-      } catch (error) {
-        console.error('Failed to fetch LoRA models:', error);
-        // Fallback to mock data
-        setLoraModels([
+        } else {
+          // Fallback to mock data if API fails
+          setLoraModels([
     {
       id: 1,
       name: 'Realistic Portrait v2.1',

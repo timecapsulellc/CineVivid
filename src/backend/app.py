@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
@@ -13,6 +14,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SkyReels-V2 API", version="1.0.0")
+
+# Mount static files for videos
+videos_dir = os.path.join(os.path.dirname(__file__), "../models/videos")
+os.makedirs(videos_dir, exist_ok=True)
+app.mount("/videos", StaticFiles(directory=videos_dir), name="videos")
+
+# Global video generator (lazy load)
+video_generator = None
+
+def get_video_generator():
+    global video_generator
+    if video_generator is None:
+        from ..utils.video_generator import VideoGenerator
+        video_generator = VideoGenerator()
+    return video_generator
 
 # Mock data storage (in production, use database)
 videos_db = []
@@ -274,18 +290,47 @@ async def get_task_status(task_id: str):
         "created_at": video.get('created_at')
     }
 
-# Async processing functions (mock implementations)
+# Async processing functions
 async def process_video_generation(task_id: str):
-    """Mock video generation processing"""
-    await asyncio.sleep(3)  # Simulate processing time
-
-    # Update video status
-    for video in videos_db:
-        if video.get('task_id') == task_id:
-            video['status'] = 'completed'
-            video['progress'] = 100
-            video['result'] = f'/videos/{task_id}.mp4'
+    """Real video generation processing"""
+    # Find the video request
+    video_data = None
+    for v in videos_db:
+        if v.get('task_id') == task_id:
+            video_data = v
             break
+
+    if not video_data:
+        return
+
+    try:
+        # Update status to processing
+        video_data['status'] = 'processing'
+        video_data['progress'] = 10
+
+        # Get generator
+        generator = get_video_generator()
+
+        # Calculate num_frames from duration (assume 24 fps)
+        duration = video_data.get('duration', 5)
+        num_frames = duration * 24
+
+        # Generate video
+        output_path = generator.generate_video(
+            prompt=video_data['prompt'],
+            num_frames=num_frames,
+            fps=24
+        )
+
+        # Update status
+        video_data['status'] = 'completed'
+        video_data['progress'] = 100
+        video_data['result'] = f'/videos/{os.path.basename(output_path)}'
+
+    except Exception as e:
+        logger.error(f"Video generation failed: {e}")
+        video_data['status'] = 'failed'
+        video_data['error'] = str(e)
 
 async def process_image_generation(task_id: str):
     """Mock image generation processing"""
