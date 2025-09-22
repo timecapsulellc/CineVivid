@@ -18,6 +18,7 @@ import TalkingAvatar from './pages/TalkingAvatar';
 import Templates from './pages/Templates';
 import VideoEditor from './pages/VideoEditor';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminContent from './pages/AdminContent';
 
 const App: React.FC = () => {
   return (
@@ -41,6 +42,7 @@ const App: React.FC = () => {
             <Route path="/home/tools/video-editor" element={<VideoEditor />} />
             <Route path="/home/short-film" element={<ShortFilm />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/content" element={<AdminContent />} />
           </Routes>
         </Box>
       </Router>

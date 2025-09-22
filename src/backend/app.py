@@ -52,6 +52,12 @@ from .audio_library import (
     get_audio_by_id, search_audio
 )
 
+# Import content manager
+from .content_manager import (
+    get_content_section, save_content_section, get_all_content,
+    reset_content_section, backup_content, restore_content, validate_content
+)
+
 # Import prompt enhancer
 try:
     from ...skyreels_v2_infer.pipelines.prompt_enhancer import PromptEnhancer
@@ -582,6 +588,84 @@ async def get_audio_by_id_endpoint(audio_id: str):
 async def search_audio_endpoint(q: str, type: Optional[str] = "all"):
     """Search audio files"""
     return {"results": search_audio(q, type)}
+
+# Content Management Endpoints
+@app.get("/admin/content")
+async def get_all_content_endpoint(current_user: dict = Depends(get_current_user)):
+    """Get all content settings for admin"""
+    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return get_all_content()
+
+@app.get("/admin/content/{section}")
+async def get_content_section_endpoint(section: str, current_user: dict = Depends(get_current_user)):
+    """Get content for a specific section"""
+    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return get_content_section(section)
+
+@app.put("/admin/content/{section}")
+async def update_content_section_endpoint(
+    section: str,
+    content: Dict[str, Any],
+    current_user: dict = Depends(get_current_user)
+):
+    """Update content for a specific section"""
+    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Validate content
+    is_valid, error_msg = validate_content(section, content)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    # Save content
+    if save_content_section(section, content):
+        return {"message": f"{section} content updated successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to save content")
+
+@app.delete("/admin/content/{section}")
+async def reset_content_section_endpoint(section: str, current_user: dict = Depends(get_current_user)):
+    """Reset content section to defaults"""
+    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if reset_content_section(section):
+        return {"message": f"{section} content reset to defaults"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to reset content")
+
+@app.post("/admin/content/backup")
+async def backup_content_endpoint(current_user: dict = Depends(get_current_user)):
+    """Create content backup"""
+    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    backup_file = backup_content()
+    if backup_file:
+        return {"message": "Content backup created", "backup_file": backup_file}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to create backup")
+
+@app.post("/admin/content/restore")
+async def restore_content_endpoint(backup_file: str, current_user: dict = Depends(get_current_user)):
+    """Restore content from backup"""
+    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if restore_content(backup_file):
+        return {"message": "Content restored from backup"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to restore content")
+
+# Public Content Endpoints (for frontend)
+@app.get("/content/{section}")
+async def get_public_content_section(section: str):
+    """Get content for frontend (public access)"""
+    return get_content_section(section)
 
 # Health check
 @app.get("/health")
