@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
-import { CssBaseline } from '@mui/material';
+import { CssBaseline, Box } from '@mui/material';
 import { theme } from './styles/theme';
+import Navigation from './components/Navigation';
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import ToVideo from './pages/ToVideo';
@@ -18,18 +19,32 @@ const App: React.FC = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/home" element={<Landing />} />
-          <Route path="/home/my-library" element={<Dashboard />} />
-          <Route path="/home/tools/all" element={<AllTools />} />
-          <Route path="/home/tools/to-video" element={<ToVideo />} />
-          <Route path="/home/tools/lip-sync" element={<LipSync />} />
-          <Route path="/home/tools/text2image" element={<TextToImage />} />
-          {/* <Route path="/home/tools/lora-list" element={<LoraList />} /> */}
-          <Route path="/home/short-film" element={<ShortFilm />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-        </Routes>
+        <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/home/*" element={
+              <>
+                <Navigation />
+                <Routes>
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/my-library" element={<Dashboard />} />
+                  <Route path="/tools/all" element={<AllTools />} />
+                  <Route path="/tools/to-video" element={<ToVideo />} />
+                  <Route path="/tools/lip-sync" element={<LipSync />} />
+                  <Route path="/tools/text2image" element={<TextToImage />} />
+                  {/* <Route path="/tools/lora-list" element={<LoraList />} /> */}
+                  <Route path="/short-film" element={<ShortFilm />} />
+                </Routes>
+              </>
+            } />
+            <Route path="/admin" element={
+              <>
+                <Navigation />
+                <AdminDashboard />
+              </>
+            } />
+          </Routes>
+        </Box>
       </Router>
     </ThemeProvider>
   );
