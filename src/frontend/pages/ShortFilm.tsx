@@ -181,80 +181,93 @@ const ShortFilm: React.FC = () => {
 
             {/* Scenes */}
             {scenes.map((scene, index) => (
-              <Accordion key={scene.id} sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-                    <Typography variant="h6">
-                      Scene {index + 1}: {scene.title}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box key={scene.id} sx={{ mb: 2, position: 'relative' }}>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between', pr: 6 }}>
+                      <Typography variant="h6">
+                        Scene {index + 1}: {scene.title}
+                      </Typography>
                       <Chip label={`${scene.duration}s`} size="small" />
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteScene(scene.id);
-                        }}
-                        disabled={isGenerating}
-                      >
-                        <Delete />
-                      </IconButton>
                     </Box>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Scene Title"
-                        value={scene.title}
-                        onChange={(e) => updateScene(scene.id, 'title', e.target.value)}
-                        disabled={isGenerating}
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        label="Scene Description"
-                        value={scene.description}
-                        onChange={(e) => updateScene(scene.id, 'description', e.target.value)}
-                        placeholder="Describe what happens in this scene..."
-                        disabled={isGenerating}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="Duration (seconds)"
-                        value={scene.duration}
-                        onChange={(e) => updateScene(scene.id, 'duration', parseInt(e.target.value) || 30)}
-                        disabled={isGenerating}
-                        inputProps={{ min: 10, max: 120 }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Visual Style</InputLabel>
-                        <Select
-                          value={scene.style}
-                          label="Visual Style"
-                          onChange={(e) => updateScene(scene.id, 'style', e.target.value)}
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Scene Title"
+                          value={scene.title}
+                          onChange={(e) => updateScene(scene.id, 'title', e.target.value)}
                           disabled={isGenerating}
-                        >
-                          <MenuItem value="cinematic">Cinematic</MenuItem>
-                          <MenuItem value="documentary">Documentary</MenuItem>
-                          <MenuItem value="animated">Animated</MenuItem>
-                          <MenuItem value="vintage">Vintage</MenuItem>
-                        </Select>
-                      </FormControl>
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={3}
+                          label="Scene Description"
+                          value={scene.description}
+                          onChange={(e) => updateScene(scene.id, 'description', e.target.value)}
+                          placeholder="Describe what happens in this scene..."
+                          disabled={isGenerating}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Duration (seconds)"
+                          value={scene.duration}
+                          onChange={(e) => updateScene(scene.id, 'duration', parseInt(e.target.value) || 30)}
+                          disabled={isGenerating}
+                          inputProps={{ min: 10, max: 120 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Visual Style</InputLabel>
+                          <Select
+                            value={scene.style}
+                            label="Visual Style"
+                            onChange={(e) => updateScene(scene.id, 'style', e.target.value)}
+                            disabled={isGenerating}
+                          >
+                            <MenuItem value="cinematic">Cinematic</MenuItem>
+                            <MenuItem value="documentary">Documentary</MenuItem>
+                            <MenuItem value="animated">Animated</MenuItem>
+                            <MenuItem value="vintage">Vintage</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
                     </Grid>
-                  </Grid>
-                </AccordionDetails>
-              </Accordion>
+                  </AccordionDetails>
+                </Accordion>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    zIndex: 1,
+                    bgcolor: 'background.paper',
+                    borderRadius: '50%',
+                    boxShadow: 1
+                  }}
+                >
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteScene(scene.id);
+                    }}
+                    disabled={isGenerating}
+                    sx={{ p: 0.5 }}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Box>
             ))}
 
             {isGenerating && (
