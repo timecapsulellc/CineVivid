@@ -1,271 +1,319 @@
+"""
+Video Generator for CineVivid
+Integrates with SkyReels-V2 for AI video generation
+"""
 import os
-import sys
 import torch
-import imageio
-from diffusers.utils import load_image
-import subprocess
-from typing import Optional
 import logging
+from pathlib import Path
+from typing import Optional, Dict, Any
+import tempfile
+import shutil
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Add path to skyreels_v2_infer
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
-
-try:
-    from skyreels_v2_infer import DiffusionForcingPipeline
-    from skyreels_v2_infer.modules import download_model
-    try:
-        from skyreels_v2_infer.pipelines import PromptEnhancer
-    except ImportError:
-        logger.warning("PromptEnhancer not available, using fallback")
-        PromptEnhancer = None
-    SKYREELS_AVAILABLE = True
-except ImportError as e:
-    logger.error(f"SkyReels-V2 not available: {e}")
-    SKYREELS_AVAILABLE = False
-    DiffusionForcingPipeline = None
-    PromptEnhancer = None
-
-from .voiceover_generator import VoiceoverGenerator
-
 class VideoGenerator:
-    def __init__(self, model_id="Skywork/SkyReels-V2-DF-1.3B-540P", resolution="540P", device="auto"):
+    """
+    Video generator using SkyReels-V2 models
+    """
+
+    def __init__(self, model_id: str = "Skywork/SkyReels-V2-T2V-14B-540P"):
+        """
+        Initialize the video generator
+
+        Args:
+            model_id: HuggingFace model ID for SkyReels-V2
+        """
         self.model_id = model_id
-        self.resolution = resolution
-        self.available = SKYREELS_AVAILABLE
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.pipeline = None
+        self.temp_dir = Path("../temp")
+        self.temp_dir.mkdir(exist_ok=True)
 
-        if device == "auto":
-            if torch.cuda.is_available():
-                device = "cuda"
-            elif torch.backends.mps.is_available():
-                device = "mps"
-            else:
-                device = "cpu"
+        logger.info(f"Initializing VideoGenerator with model: {model_id}")
+        logger.info(f"Using device: {self.device}")
 
-        self.device = torch.device(device)
-        self.dtype = torch.bfloat16 if device != "cpu" else torch.float32
-
-        if self.available:
+    def _load_pipeline(self):
+        """Lazy load the diffusion pipeline"""
+        if self.pipeline is None:
             try:
-                logger.info(f"Loading SkyReels-V2 model {model_id} on {self.device}")
-                # Note: Requires Hugging Face authentication. Run 'huggingface-cli login' with your token.
-                downloaded_model = download_model(model_id)
+                from diffusers import SkyReelsV2Pipeline, UniPCMultistepScheduler
 
-                self.pipe = DiffusionForcingPipeline(
-                    downloaded_model,
-                    dit_path=downloaded_model,
-                    device=self.device,
-                    weight_dtype=self.dtype,
-                    use_usp=False,  # Disable USP for simplicity
-                    offload=False,
+                logger.info("Loading SkyReels-V2 pipeline...")
+                self.pipeline = SkyReelsV2Pipeline.from_pretrained(
+                    self.model_id,
+                    torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                    safety_checker=None,
+                    requires_safety_checker=False
                 )
-                logger.info("SkyReels-V2 model loaded successfully")
-            except Exception as e:
-                logger.error(f"Failed to load SkyReels-V2 model: {e}")
-                self.available = False
-                self.pipe = None
-        else:
-            logger.warning("SkyReels-V2 not available, using mock generation")
-            self.pipe = None
 
-        # Optional: load prompt enhancer
-        self.prompt_enhancer = None
-        if PromptEnhancer:
-            try:
-                self.prompt_enhancer = PromptEnhancer()
-                logger.info("Prompt enhancer loaded successfully")
-            except Exception as e:
-                logger.warning(f"Prompt enhancer not available: {e}")
+                # Set scheduler
+                flow_shift = 8.0  # T2V
+                self.pipeline.scheduler = UniPCMultistepScheduler.from_config(
+                    self.pipeline.scheduler.config, flow_shift=flow_shift
+                )
 
-        # Initialize voiceover generator
+                if self.device == "cuda":
+                    self.pipeline = self.pipeline.to(self.device)
+
+                logger.info("Pipeline loaded successfully")
+
+            except Exception as e:
+                logger.error(f"Failed to load pipeline: {e}")
+                raise
+
+    def generate_video(
+        self,
+        prompt: str,
+        num_frames: int = 97,
+        fps: int = 24,
+        aspect_ratio: str = "16:9",
+        guidance_scale: float = 6.0,
+        **kwargs
+    ) -> str:
+        """
+        Generate video from text prompt
+
+        Args:
+            prompt: Text description for video generation
+            num_frames: Number of frames (97 for 540P, 121 for 720P)
+            fps: Frames per second
+            aspect_ratio: Video aspect ratio
+            guidance_scale: Classifier-free guidance scale
+
+        Returns:
+            Path to generated video file
+        """
         try:
-            self.voiceover_generator = VoiceoverGenerator()
-            logger.info("Voiceover generator initialized")
-        except Exception as e:
-            logger.error(f"Voiceover generator failed: {e}")
-            self.voiceover_generator = None
+            self._load_pipeline()
 
-    def enhance_prompt(self, prompt):
-        if self.prompt_enhancer:
-            return self.prompt_enhancer(prompt)
-        return prompt
+            # Set dimensions based on aspect ratio
+            if aspect_ratio == "16:9":
+                height, width = 544, 960  # 540P
+            elif aspect_ratio == "9:16":
+                height, width = 960, 544  # Portrait
+            elif aspect_ratio == "1:1":
+                height, width = 544, 544  # Square
+            else:
+                height, width = 544, 960  # Default
 
-    def generate_video(self, prompt, num_frames=97, fps=24, seed=None, guidance_scale=6.0, image=None, voiceover_text=None, voice_id=None):
-        # Check if SkyReels-V2 is available
-        if not self.available or not self.pipe:
-            logger.warning("SkyReels-V2 not available, generating mock video")
-            return self._generate_mock_video(prompt, num_frames, fps, voiceover_text, voice_id)
+            logger.info(f"Generating video: {prompt[:50]}...")
+            logger.info(f"Dimensions: {height}x{width}, Frames: {num_frames}")
 
-        if self.resolution == "540P":
-            height, width = 544, 960
-        elif self.resolution == "720P":
-            height, width = 720, 1280
-        else:
-            height, width = 544, 960
-
-        enhanced_prompt = self.enhance_prompt(prompt)
-        logger.info(f"Generating video for prompt: {enhanced_prompt[:100]}...")
-
-        if seed is None:
-            import random
-            import time
-            random.seed(time.time())
-            seed = int(random.randrange(4294967294))
-
-        generator = torch.Generator(device=self.device).manual_seed(seed)
-
-        negative_prompt = "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走"
-
-        if image:
-            try:
-                image = load_image(image)
-                from skyreels_v2_infer.pipelines.image2video_pipeline import resizecrop
-                image = resizecrop(image, height, width).convert("RGB")
-                logger.info("Image loaded and processed for I2V generation")
-            except Exception as e:
-                logger.error(f"Failed to process image: {e}")
-                image = None
-
-        try:
+            # Generate video
             with torch.no_grad():
-                video_frames = self.pipe(
-                    prompt=enhanced_prompt,
-                    negative_prompt=negative_prompt,
-                    image=image,
+                output = self.pipeline(
+                    prompt=prompt,
+                    num_inference_steps=50,  # Adjust based on quality vs speed
                     height=height,
                     width=width,
                     num_frames=num_frames,
-                    num_inference_steps=30,
                     guidance_scale=guidance_scale,
-                    generator=generator,
-                )[0]
-            logger.info("Video generation completed successfully")
+                    **kwargs
+                )
+
+            # Save video
+            output_path = self.temp_dir / f"generated_{torch.randint(0, 1000000, (1,)).item()}.mp4"
+
+            # Export to video (using diffusers built-in export)
+            from diffusers.utils import export_to_video
+            export_to_video(output.frames[0], str(output_path), fps=fps)
+
+            logger.info(f"Video generated successfully: {output_path}")
+            return str(output_path)
+
         except Exception as e:
             logger.error(f"Video generation failed: {e}")
-            return self._generate_mock_video(prompt, num_frames, fps, voiceover_text, voice_id)
+            raise
 
-        # Save to videos directory
-        videos_dir = os.path.join(os.path.dirname(__file__), "../models/videos")
-        os.makedirs(videos_dir, exist_ok=True)
+    def generate_video_from_image(
+        self,
+        image_path: str,
+        prompt: str,
+        num_frames: int = 97,
+        fps: int = 24,
+        guidance_scale: float = 5.0,
+        **kwargs
+    ) -> str:
+        """
+        Generate video from image (Image-to-Video)
 
+        Args:
+            image_path: Path to input image
+            prompt: Text description for motion
+            num_frames: Number of frames to generate
+            fps: Frames per second
+            guidance_scale: Classifier-free guidance scale
+
+        Returns:
+            Path to generated video file
+        """
+        try:
+            from diffusers import SkyReelsV2ImageToVideoPipeline, UniPCMultistepScheduler
+            from PIL import Image
+
+            # Load I2V pipeline
+            pipeline = SkyReelsV2ImageToVideoPipeline.from_pretrained(
+                "Skywork/SkyReels-V2-I2V-14B-540P",
+                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                safety_checker=None,
+                requires_safety_checker=False
+            )
+
+            # Set scheduler
+            flow_shift = 5.0  # I2V
+            pipeline.scheduler = UniPCMultistepScheduler.from_config(
+                pipeline.scheduler.config, flow_shift=flow_shift
+            )
+
+            if self.device == "cuda":
+                pipeline = pipeline.to(self.device)
+
+            # Load and process image
+            image = Image.open(image_path).convert("RGB")
+
+            logger.info(f"Generating I2V video from image: {image_path}")
+            logger.info(f"Prompt: {prompt[:50]}...")
+
+            # Generate video
+            with torch.no_grad():
+                output = pipeline(
+                    image=image,
+                    prompt=prompt,
+                    num_inference_steps=50,
+                    num_frames=num_frames,
+                    guidance_scale=guidance_scale,
+                    **kwargs
+                )
+
+            # Save video
+            output_path = self.temp_dir / f"i2v_{torch.randint(0, 1000000, (1,)).item()}.mp4"
+
+            from diffusers.utils import export_to_video
+            export_to_video(output.frames[0], str(output_path), fps=fps)
+
+            logger.info(f"I2V video generated successfully: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logger.error(f"I2V generation failed: {e}")
+            raise
+
+    def extend_video(
+        self,
+        video_path: str,
+        extension_prompt: str = "",
+        additional_frames: int = 97,
+        **kwargs
+    ) -> str:
+        """
+        Extend an existing video with additional frames
+
+        Args:
+            video_path: Path to input video
+            extension_prompt: Description for extension
+            additional_frames: Number of frames to add
+
+        Returns:
+            Path to extended video file
+        """
+        try:
+            from diffusers import SkyReelsV2DiffusionForcingVideoToVideoPipeline, UniPCMultistepScheduler
+
+            # Load V2V pipeline
+            pipeline = SkyReelsV2DiffusionForcingVideoToVideoPipeline.from_pretrained(
+                "Skywork/SkyReels-V2-DF-14B-540P",
+                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                safety_checker=None,
+                requires_safety_checker=False
+            )
+
+            # Set scheduler
+            flow_shift = 5.0  # V2V
+            pipeline.scheduler = UniPCMultistepScheduler.from_config(
+                pipeline.scheduler.config, flow_shift=flow_shift
+            )
+
+            if self.device == "cuda":
+                pipeline = pipeline.to(self.device)
+
+            # Load video
+            from diffusers.utils import load_video
+            video_frames = load_video(video_path)
+
+            prompt = extension_prompt or "Continue the video seamlessly"
+
+            logger.info(f"Extending video: {video_path}")
+
+            # Generate extension
+            with torch.no_grad():
+                output = pipeline(
+                    video=video_frames,
+                    prompt=prompt,
+                    num_frames=additional_frames,
+                    **kwargs
+                )
+
+            # Combine original + extension
+            import torch
+            combined_frames = torch.cat([video_frames, output.frames[0]], dim=0)
+
+            # Save extended video
+            output_path = self.temp_dir / f"extended_{torch.randint(0, 1000000, (1,)).item()}.mp4"
+
+            from diffusers.utils import export_to_video
+            export_to_video(combined_frames, str(output_path), fps=24)
+
+            logger.info(f"Video extended successfully: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logger.error(f"Video extension failed: {e}")
+            raise
+
+    def apply_camera_director(
+        self,
+        prompt: str,
+        camera_instructions: str,
+        **kwargs
+    ) -> str:
+        """
+        Apply camera director instructions to prompt
+
+        Args:
+            prompt: Base prompt
+            camera_instructions: Camera movement instructions
+
+        Returns:
+            Enhanced prompt with camera directions
+        """
+        # Enhance prompt with camera instructions
+        enhanced_prompt = f"{prompt}. {camera_instructions}"
+
+        # Generate video with enhanced prompt
+        return self.generate_video(enhanced_prompt, **kwargs)
+
+    def cleanup_temp_files(self, older_than_hours: int = 24):
+        """Clean up temporary files older than specified hours"""
         import time
-        current_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-        video_filename = f"{prompt[:50].replace('/', '').replace(' ', '_')}_{seed}_{current_time}.mp4"
-        output_path = os.path.join(videos_dir, video_filename)
 
-        # Create video without audio first
-        temp_video_path = output_path.replace('.mp4', '_temp.mp4')
-        imageio.mimwrite(temp_video_path, video_frames, fps=fps, quality=8, output_params=["-loglevel", "error"])
+        current_time = time.time()
+        for file_path in self.temp_dir.glob("*"):
+            if file_path.is_file():
+                file_age = current_time - file_path.stat().st_mtime
+                if file_age > (older_than_hours * 3600):
+                    try:
+                        file_path.unlink()
+                        logger.info(f"Cleaned up temp file: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up {file_path}: {e}")
 
-        # Add voiceover if requested
-        if voiceover_text and self.voiceover_generator:
-            audio_path = self.voiceover_generator.generate_voiceover(voiceover_text, voice_id or "21m00Tcm4TlvDq8ikWAM")
-            if audio_path:
-                # Merge video and audio using FFmpeg
-                try:
-                    result = subprocess.run([
-                        'ffmpeg', '-y', '-i', temp_video_path, '-i', audio_path,
-                        '-c:v', 'copy', '-c:a', 'aac', '-shortest', output_path
-                    ], capture_output=True, text=True)
-
-                    if result.returncode == 0:
-                        print(f"Successfully added voiceover to video: {output_path}")
-                        # Clean up temp files
-                        os.remove(temp_video_path)
-                        os.remove(audio_path)
-                    else:
-                        print(f"FFmpeg failed: {result.stderr}")
-                        # Fallback to video without audio
-                        os.rename(temp_video_path, output_path)
-                        os.remove(audio_path)
-                except Exception as e:
-                    print(f"Failed to merge audio: {e}")
-                    # Fallback to video without audio
-                    os.rename(temp_video_path, output_path)
-            else:
-                # No audio generated, use video as-is
-                os.rename(temp_video_path, output_path)
-        else:
-            # No voiceover requested, use video as-is
-            os.rename(temp_video_path, output_path)
-
-        return output_path
-
-    def _generate_mock_video(self, prompt, num_frames, fps, voiceover_text=None, voice_id=None):
-        """Generate a mock video when SkyReels-V2 is not available"""
-        logger.info("Generating mock video for demonstration purposes")
-
-        # Create a simple animated video (color gradient animation)
-        import numpy as np
-
-        height, width = 544, 960  # 540P resolution
-        frames = []
-
-        for i in range(num_frames):
-            # Create a gradient that changes over time
-            gradient = np.zeros((height, width, 3), dtype=np.uint8)
-
-            # Create animated gradient
-            r = int(255 * (0.5 + 0.5 * np.sin(i / 10)))
-            g = int(255 * (0.5 + 0.5 * np.sin(i / 10 + 2)))
-            b = int(255 * (0.5 + 0.5 * np.sin(i / 10 + 4)))
-
-            for y in range(height):
-                for x in range(width):
-                    gradient[y, x] = [r, g, b]
-
-            # Add some text overlay (mock)
-            # For simplicity, we'll just use the gradient
-
-            frames.append(gradient)
-
-        # Save to videos directory
-        videos_dir = os.path.join(os.path.dirname(__file__), "../models/videos")
-        os.makedirs(videos_dir, exist_ok=True)
-
-        import time
-        current_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-        video_filename = f"mock_{prompt[:30].replace(' ', '_')}_{current_time}.mp4"
-        output_path = os.path.join(videos_dir, video_filename)
-
-        # Create video without audio first
-        temp_video_path = output_path.replace('.mp4', '_temp.mp4')
-        imageio.mimwrite(temp_video_path, frames, fps=fps, quality=8, output_params=["-loglevel", "error"])
-
-        # Add voiceover if requested
-        if voiceover_text and self.voiceover_generator:
-            audio_path = self.voiceover_generator.generate_voiceover(voiceover_text, voice_id or "21m00Tcm4TlvDq8ikWAM")
-            if audio_path:
-                # Merge video and audio using FFmpeg
-                try:
-                    result = subprocess.run([
-                        'ffmpeg', '-y', '-i', temp_video_path, '-i', audio_path,
-                        '-c:v', 'copy', '-c:a', 'aac', '-shortest', output_path
-                    ], capture_output=True, text=True)
-
-                    if result.returncode == 0:
-                        logger.info(f"Successfully added voiceover to mock video: {output_path}")
-                        # Clean up temp files
-                        os.remove(temp_video_path)
-                        os.remove(audio_path)
-                    else:
-                        logger.warning(f"FFmpeg failed for mock video: {result.stderr}")
-                        # Fallback to video without audio
-                        os.rename(temp_video_path, output_path)
-                        os.remove(audio_path)
-                except Exception as e:
-                    logger.error(f"Failed to merge audio to mock video: {e}")
-                    # Fallback to video without audio
-                    os.rename(temp_video_path, output_path)
-            else:
-                # No audio generated, use video as-is
-                os.rename(temp_video_path, output_path)
-        else:
-            # No voiceover requested, use video as-is
-            os.rename(temp_video_path, output_path)
-
-        logger.info(f"Mock video generated: {output_path}")
-        return output_path
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get information about the loaded model"""
+        return {
+            "model_id": self.model_id,
+            "device": self.device,
+            "pipeline_loaded": self.pipeline is not None,
+            "cuda_available": torch.cuda.is_available(),
+            "temp_dir": str(self.temp_dir)
+        }

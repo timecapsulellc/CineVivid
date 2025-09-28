@@ -1,72 +1,31 @@
+"""
+Authentication and Authorization for CineVivid
+JWT-based authentication with credit system
+"""
 from datetime import datetime, timedelta
 from typing import Optional
-import jwt
-import bcrypt
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # JWT Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Credit costs (per operation)
-CREDIT_COSTS = {
-    "video_generation": 50,  # per second of video
-    "image_generation": 10,  # per image
-    "lip_sync": 30,  # per video
-    "talking_avatar": 40,  # per video
-    "short_film": 100,  # per scene
-    "prompt_enhancement": 5,  # per enhancement
-    "video_editing": 20,  # per edit operation
-}
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Pricing tiers
-PRICING_TIERS = {
-    "free": {
-        "name": "Free",
-        "credits": 300,
-        "price": 0,
-        "features": ["Basic generation", "Watermarked output", "Community support"]
-    },
-    "pro": {
-        "name": "Pro",
-        "credits": 1000,
-        "price": 19,
-        "features": ["HD generation", "No watermarks", "Priority support", "API access"]
-    },
-    "business": {
-        "name": "Business",
-        "credits": 3000,
-        "price": 49,
-        "features": ["4K generation", "Team collaboration", "Custom models", "Dedicated support"]
-    },
-    "enterprise": {
-        "name": "Enterprise",
-        "credits": -1,  # unlimited
-        "price": 0,  # custom pricing
-        "features": ["Unlimited generation", "White-label", "On-premise deployment", "SLA"]
-    }
-}
+# In-memory user storage (replace with database in production)
+users_db = {}
 
-# Mock user database (replace with real database in production)
-users_db = {
-    "demo@cinevivid.ai": {
-        "id": 1,
-        "email": "demo@cinevivid.ai",
-        "hashed_password": bcrypt.hashpw("demo123".encode(), bcrypt.gensalt()).decode(),
-        "tier": "free",
-        "credits": 300,
-        "created_at": datetime.now().isoformat(),
-        "is_active": True
-    }
-}
+def hash_password(password: str) -> str:
+    """Hash a password"""
+    return pwd_context.hash(password)
 
-security = HTTPBearer()
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
@@ -80,136 +39,125 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
-
-def get_password_hash(password: str) -> str:
-    """Hash password"""
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-def authenticate_user(email: str, password: str):
-    """Authenticate user credentials"""
-    user = users_db.get(email)
+def authenticate_user(username: str, password: str) -> Optional[dict]:
+    """Authenticate a user"""
+    user = users_db.get(username)
     if not user:
-        return False
+        return None
     if not verify_password(password, user["hashed_password"]):
-        return False
+        return None
     return user
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current authenticated user"""
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+def get_user_credits(username: str) -> int:
+    """Get user's current credits"""
+    user = users_db.get(username)
+    return user.get("credits", 0) if user else 0
 
-    user = users_db.get(email)
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    if not user.get("is_active", False):
-        raise HTTPException(status_code=400, detail="Inactive user")
-
-    return user
-
-def deduct_credits(user_email: str, operation: str, amount: Optional[int] = None) -> bool:
+def deduct_credits(username: str, amount: int) -> bool:
     """Deduct credits from user account"""
-    user = users_db.get(user_email)
-    if not user:
+    user = users_db.get(username)
+    if not user or user.get("credits", 0) < amount:
         return False
 
-    # Unlimited credits for enterprise
-    if user.get("tier") == "enterprise":
-        return True
-
-    cost = amount if amount else CREDIT_COSTS.get(operation, 10)
-
-    if user["credits"] < cost:
-        return False
-
-    user["credits"] -= cost
+    user["credits"] -= amount
     return True
 
-def add_credits(user_email: str, amount: int) -> bool:
+def add_credits(username: str, amount: int) -> bool:
     """Add credits to user account"""
-    user = users_db.get(user_email)
+    user = users_db.get(username)
     if not user:
         return False
-
-    # Unlimited credits for enterprise - don't add more
-    if user.get("tier") == "enterprise":
-        return True
 
     user["credits"] += amount
     return True
 
-def get_user_credits(user_email: str) -> int:
-    """Get user's current credit balance"""
-    user = users_db.get(user_email)
-    if not user:
-        return 0
+def create_user(username: str, email: str, password: str, tier: str = "free") -> dict:
+    """Create a new user"""
+    if username in users_db:
+        raise ValueError("Username already exists")
 
-    # Unlimited credits for enterprise
-    if user.get("tier") == "enterprise":
-        return 999999
+    # Set initial credits based on tier
+    initial_credits = {
+        "free": 300,
+        "pro": 1000,
+        "business": 3000,
+        "enterprise": 10000
+    }.get(tier, 300)
 
-    return user.get("credits", 0)
+    user = {
+        "id": len(users_db) + 1,
+        "username": username,
+        "email": email,
+        "hashed_password": hash_password(password),
+        "tier": tier,
+        "credits": initial_credits,
+        "created_at": datetime.utcnow().isoformat(),
+        "is_active": True,
+        "is_admin": False
+    }
 
-def upgrade_user_tier(user_email: str, new_tier: str) -> bool:
-    """Upgrade user to new tier"""
-    user = users_db.get(user_email)
+    users_db[username] = user
+    return user
+
+def get_current_user(token: str) -> Optional[dict]:
+    """Get current user from JWT token"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+
+    user = users_db.get(username)
+    return user if user and user.get("is_active") else None
+
+def update_user_tier(username: str, new_tier: str) -> bool:
+    """Update user subscription tier"""
+    user = users_db.get(username)
     if not user:
         return False
 
-    if new_tier not in PRICING_TIERS:
-        return False
+    # Update credits based on new tier
+    tier_credits = {
+        "free": 300,
+        "pro": 1000,
+        "business": 3000,
+        "enterprise": 10000
+    }
+
+    old_credits = user.get("credits", 0)
+    new_credits = tier_credits.get(new_tier, 300)
 
     user["tier"] = new_tier
-
-    # Add credits for new tier (if not enterprise)
-    if new_tier != "enterprise":
-        user["credits"] = PRICING_TIERS[new_tier]["credits"]
+    user["credits"] = new_credits
 
     return True
 
-def register_user(email: str, password: str, tier: str = "free") -> dict:
-    """Register new user"""
-    if email in users_db:
-        raise HTTPException(status_code=400, detail="Email already registered")
+def get_user_stats(username: str) -> dict:
+    """Get user statistics"""
+    user = users_db.get(username)
+    if not user:
+        return {}
 
-    hashed_password = get_password_hash(password)
-    user = {
-        "id": len(users_db) + 1,
-        "email": email,
-        "hashed_password": hashed_password,
-        "tier": tier,
-        "credits": PRICING_TIERS[tier]["credits"] if tier != "enterprise" else 999999,
-        "created_at": datetime.now().isoformat(),
-        "is_active": True
+    return {
+        "tier": user.get("tier"),
+        "credits": user.get("credits"),
+        "videos_generated": 0,  # Would need to query from database
+        "account_age_days": (datetime.utcnow() - datetime.fromisoformat(user["created_at"])).days,
+        "is_admin": user.get("is_admin", False)
     }
 
-    users_db[email] = user
-    return user
+# Initialize with demo users
+def init_demo_users():
+    """Initialize demo users for testing"""
+    try:
+        create_user("demo", "demo@cinevivid.ai", "demo123", "free")
+        create_user("admin", "admin@cinevivid.ai", "admin123", "enterprise")
+        users_db["admin"]["is_admin"] = True
+        print("Demo users initialized")
+    except ValueError:
+        pass  # Users already exist
 
-def get_pricing_info():
-    """Get pricing tiers information"""
-    return PRICING_TIERS
-
-def calculate_credit_cost(operation: str, params: dict = None) -> int:
-    """Calculate credit cost for an operation"""
-    base_cost = CREDIT_COSTS.get(operation, 10)
-
-    # Adjust based on parameters
-    if params:
-        if operation == "video_generation":
-            duration = params.get("duration", 5)
-            base_cost = base_cost * duration
-        elif operation == "short_film":
-            scenes = params.get("scenes", 1)
-            base_cost = base_cost * scenes
-
-    return base_cost
+# Call on import
+init_demo_users()

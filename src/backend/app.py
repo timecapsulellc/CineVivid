@@ -1,674 +1,608 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
-from fastapi.responses import JSONResponse
+"""
+CineVivid Backend API
+FastAPI backend for AI video generation using SkyReels-V2
+"""
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
 import uuid
 import json
 import asyncio
-from datetime import datetime, timedelta
 import logging
-from dotenv import load_dotenv
+from datetime import datetime, timedelta
+from pathlib import Path
+import shutil
 
-# Load environment variables
-load_dotenv()
-
-# Import authentication
-from .auth import (
-    authenticate_user, create_access_token, get_current_user,
-    deduct_credits, get_user_credits, add_credits, ACCESS_TOKEN_EXPIRE_MINUTES
-)
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-app = FastAPI(title="CineVivid API", version="1.0.0")
-
-# Mount static files for videos
-videos_dir = os.path.join(os.path.dirname(__file__), "../models/videos")
-os.makedirs(videos_dir, exist_ok=True)
-app.mount("/videos", StaticFiles(directory=videos_dir), name="videos")
-
-# Import Celery task
-from .celery_tasks import generate_video_task
-
-# Global video generator (lazy load)
-video_generator = None
-
-def get_video_generator():
-    global video_generator
-    if video_generator is None:
-        from ..utils.video_generator import VideoGenerator
-        video_generator = VideoGenerator()
-    return video_generator
-
-# Import data storage
-from .db import videos_db, lora_models_db
-
-# Import audio library
-from .audio_library import (
-    get_sound_effects, get_music_tracks, get_audio_categories,
-    get_audio_by_id, search_audio
-)
-
-# Import content manager
-from .content_manager import (
-    get_content_section, save_content_section, get_all_content,
-    reset_content_section, backup_content, restore_content, validate_content
-)
-
-# Import prompt enhancer
+# Import SkyReels-V2 components
 try:
-    from ...skyreels_v2_infer.pipelines.prompt_enhancer import PromptEnhancer
+    from ..skyreels_v2_infer.pipelines.prompt_enhancer import PromptEnhancer
     prompt_enhancer = PromptEnhancer()
 except ImportError:
     prompt_enhancer = None
-    logger.warning("Prompt enhancer not available")
 
-# Pydantic models for request/response
-class VideoGenerationRequest(BaseModel):
-    prompt: str
-    aspect_ratio: Optional[str] = "16:9"
-    duration: Optional[int] = 5
-    style: Optional[str] = "cinematic"
+# Import utilities
+from .auth import (
+    authenticate_user, create_access_token, get_current_user,
+    deduct_credits, get_user_credits, ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
-class PromptEnhancementRequest(BaseModel):
-    prompt: str
-    context: Optional[Dict[str, Any]] = None
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class ImageGenerationRequest(BaseModel):
-    prompt: str
-    negative_prompt: Optional[str] = ""
-    style: Optional[str] = "realistic"
-    aspect_ratio: Optional[str] = "1:1"
-    quality: Optional[int] = 70
+# Initialize FastAPI app
+app = FastAPI(
+    title="CineVivid API",
+    version="1.0.0",
+    description="AI Video Generation Platform powered by SkyReels-V2"
+)
 
-class LipSyncRequest(BaseModel):
-    video_file: UploadFile
-    audio_text: str
-    voice: Optional[str] = "natural"
-
-class ShortFilmRequest(BaseModel):
-    title: str
-    genre: str
-    scenes: List[Dict[str, Any]]
-
-class TalkingAvatarRequest(BaseModel):
-    text: str
-    voice_id: str
-    avatar_id: str
-    speed: Optional[float] = 1.0
-    pitch: Optional[int] = 0
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    tier: Optional[str] = "free"
-
-class CreditPurchaseRequest(BaseModel):
-    amount: int
-    tier: Optional[str] = None
-
-# CORS middleware (in production, configure properly)
-from fastapi.middleware.cors import CORSMiddleware
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:1234", "http://localhost:3000"],  # Frontend URLs
+    allow_origins=["http://localhost:1234", "http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Create directories
+VIDEOS_DIR = Path("../models/videos")
+VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_DIR = Path("../temp")
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount static files
+app.mount("/videos", StaticFiles(directory=str(VIDEOS_DIR)), name="videos")
+app.mount("/temp", StaticFiles(directory=str(TEMP_DIR)), name="temp")
+
+# Global video generator (lazy load)
+video_generator = None
+
+def get_video_generator():
+    """Lazy load video generator"""
+    global video_generator
+    if video_generator is None:
+        try:
+            from ..utils.video_generator import VideoGenerator
+            video_generator = VideoGenerator()
+            logger.info("Video generator loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load video generator: {e}")
+            video_generator = None
+    return video_generator
+
+# Pydantic models
+class VideoGenerationRequest(BaseModel):
+    prompt: str
+    aspect_ratio: Optional[str] = "16:9"
+    duration: Optional[int] = 5
+    style: Optional[str] = "cinematic"
+    num_frames: Optional[int] = 97
+    guidance_scale: Optional[float] = 6.0
+    enhance_prompt: Optional[bool] = True
+
+class ImageToVideoRequest(BaseModel):
+    prompt: str
+    image_path: str
+    num_frames: Optional[int] = 97
+    guidance_scale: Optional[float] = 5.0
+    enhance_prompt: Optional[bool] = True
+
+class PromptEnhancementRequest(BaseModel):
+    prompt: str
+    context: Optional[Dict[str, Any]] = None
+
+class VoiceoverRequest(BaseModel):
+    text: str
+    voice_id: Optional[str] = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+    model: Optional[str] = "eleven_monolingual_v1"
+
+class VideoEditRequest(BaseModel):
+    video_path: str
+    operation: str  # trim, add_text, add_music, etc.
+    params: Dict[str, Any]
+
+# In-memory storage (replace with database in production)
+videos_db = []
+users_db = []
+
 # API Routes
 
 @app.get("/")
 async def root():
-    return {"message": "SkyReels-V2 API", "version": "1.0.0"}
-
-# Video Library Endpoints
-@app.get("/videos")
-async def get_videos(search: Optional[str] = None, status: Optional[str] = None):
-    """Get user's video library"""
-    filtered_videos = videos_db
-
-    if search:
-        filtered_videos = [v for v in filtered_videos if search.lower() in v.get('title', '').lower() or search.lower() in v.get('prompt', '').lower()]
-
-    if status and status != 'all':
-        filtered_videos = [v for v in filtered_videos if v.get('status') == status]
-
-    return {"videos": filtered_videos}
-
-@app.delete("/videos/{video_id}")
-async def delete_video(video_id: int):
-    """Delete a video from library"""
-    global videos_db
-    videos_db = [v for v in videos_db if v.get('id') != video_id]
-    return {"message": "Video deleted successfully"}
-
-# Text-to-Video Generation
-@app.post("/generate/video")
-async def generate_video(request: VideoGenerationRequest):
-    """Generate video from text prompt"""
-    task_id = str(uuid.uuid4())
-
-    # Mock video generation (in production, integrate with actual model)
-    video_data = {
-        "id": len(videos_db) + 1,
-        "task_id": task_id,
-        "title": f"Generated Video {len(videos_db) + 1}",
-        "prompt": request.prompt,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "aspect_ratio": request.aspect_ratio,
-        "duration": request.duration,
-        "style": request.style,
-        "thumbnail": "/placeholder.jpg"
-    }
-
-    videos_db.append(video_data)
-
-    # Start Celery task
-    generate_video_task.delay(task_id)
-
+    """API root endpoint"""
     return {
-        "task_id": task_id,
-        "status": "processing",
-        "message": "Video generation started"
+        "message": "CineVivid API",
+        "version": "1.0.0",
+        "status": "running",
+        "features": [
+            "text-to-video", "image-to-video", "prompt-enhancement",
+            "voiceover", "video-editing", "authentication"
+        ]
     }
 
-# Text-to-Image Generation
-@app.post("/generate/image")
-async def generate_image(request: ImageGenerationRequest):
-    """Generate image from text prompt"""
-    task_id = str(uuid.uuid4())
-
-    # Mock image generation
-    image_data = {
-        "id": len(videos_db) + 1,
-        "task_id": task_id,
-        "type": "image",
-        "prompt": request.prompt,
-        "negative_prompt": request.negative_prompt,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "style": request.style,
-        "aspect_ratio": request.aspect_ratio,
-        "quality": request.quality,
-        "images": []
-    }
-
-    videos_db.append(image_data)
-
-    # Simulate async processing
-    asyncio.create_task(process_image_generation(task_id))
-
+@app.get("/health")
+async def health_check():
+    """API health check"""
     return {
-        "task_id": task_id,
-        "status": "processing",
-        "message": "Image generation started"
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "services": {
+            "video_generator": video_generator is not None,
+            "prompt_enhancer": prompt_enhancer is not None
+        }
     }
 
-# Lip Sync Generation
-@app.post("/generate/lip-sync")
-async def generate_lip_sync(
-    video_file: UploadFile = File(...),
-    audio_text: str = Form(...),
-    voice: str = Form("natural")
+# Authentication endpoints
+@app.post("/auth/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    """User login"""
+    user = authenticate_user(username, password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    access_token = create_access_token(data={"sub": user["username"]})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+@app.post("/auth/register")
+async def register(username: str = Form(...), email: str = Form(...), password: str = Form(...)):
+    """User registration"""
+    # Check if user exists
+    if any(u["username"] == username for u in users_db):
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    # Create new user
+    user = {
+        "id": len(users_db) + 1,
+        "username": username,
+        "email": email,
+        "credits": 300,  # Free tier credits
+        "tier": "free",
+        "created_at": datetime.now().isoformat()
+    }
+    users_db.append(user)
+
+    access_token = create_access_token(data={"sub": user["username"]})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+@app.get("/auth/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user info"""
+    return current_user
+
+@app.get("/auth/credits")
+async def get_credits(current_user: dict = Depends(get_current_user)):
+    """Get user credits"""
+    return {"credits": get_user_credits(current_user["username"])}
+
+# Video Generation endpoints
+
+@app.post("/generate/text-to-video")
+async def generate_text_to_video(
+    request: VideoGenerationRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
 ):
-    """Generate lip sync video"""
-    task_id = str(uuid.uuid4())
-
-    # Save uploaded file (mock)
-    file_path = f"/tmp/{task_id}_{video_file.filename}"
-
-    # Mock lip sync generation
-    video_data = {
-        "id": len(videos_db) + 1,
-        "task_id": task_id,
-        "type": "lip_sync",
-        "title": f"Lip Sync Video {len(videos_db) + 1}",
-        "audio_text": audio_text,
-        "voice": voice,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "thumbnail": "/placeholder.jpg"
-    }
-
-    videos_db.append(video_data)
-
-    # Simulate async processing
-    asyncio.create_task(process_lip_sync_generation(task_id))
-
-    return {
-        "task_id": task_id,
-        "status": "processing",
-        "message": "Lip sync generation started"
-    }
-
-# Short Film Generation
-@app.post("/generate/short-film")
-async def generate_short_film(request: ShortFilmRequest):
-    """Generate short film from scenes"""
-    task_id = str(uuid.uuid4())
-
-    # Mock short film generation
-    film_data = {
-        "id": len(videos_db) + 1,
-        "task_id": task_id,
-        "type": "short_film",
-        "title": request.title,
-        "genre": request.genre,
-        "scenes": request.scenes,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "thumbnail": "/placeholder.jpg",
-        "total_scenes": len(request.scenes),
-        "estimated_duration": sum(scene.get('duration', 30) for scene in request.scenes)
-    }
-
-    videos_db.append(film_data)
-
-    # Simulate async processing
-    asyncio.create_task(process_short_film_generation(task_id))
-
-    return {
-        "task_id": task_id,
-        "status": "processing",
-        "message": "Short film generation started"
-    }
-
-# Talking Avatar Generation
-@app.post("/generate/talking-avatar")
-async def generate_talking_avatar(request: TalkingAvatarRequest):
-    """Generate talking avatar video"""
-    task_id = str(uuid.uuid4())
-
-    # Mock talking avatar generation
-    video_data = {
-        "id": len(videos_db) + 1,
-        "task_id": task_id,
-        "type": "talking_avatar",
-        "title": f"Talking Avatar {len(videos_db) + 1}",
-        "text": request.text,
-        "voice_id": request.voice_id,
-        "avatar_id": request.avatar_id,
-        "speed": request.speed,
-        "pitch": request.pitch,
-        "status": "processing",
-        "created_at": datetime.now().isoformat(),
-        "thumbnail": "/placeholder.jpg"
-    }
-
-    videos_db.append(video_data)
-
-    # Simulate async processing
-    asyncio.create_task(process_talking_avatar_generation(task_id))
-
-    return {
-        "task_id": task_id,
-        "status": "processing",
-        "message": "Talking avatar generation started"
-    }
-
-# LoRA Models Endpoints
-@app.get("/lora-models")
-async def get_lora_models(search: Optional[str] = None, category: Optional[str] = None):
-    """Get available LoRA models"""
-    filtered_models = lora_models_db
-
-    if search:
-        filtered_models = [m for m in filtered_models if search.lower() in m['name'].lower() or search.lower() in m['description'].lower()]
-
-    if category and category != 'all':
-        filtered_models = [m for m in filtered_models if m['category'] == category]
-
-    return {"models": filtered_models}
-
-@app.get("/lora-models/{model_id}")
-async def get_lora_model(model_id: int):
-    """Get specific LoRA model details"""
-    model = next((m for m in lora_models_db if m['id'] == model_id), None)
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-    return model
-
-# Task Status Endpoints
-@app.get("/status/{task_id}")
-async def get_task_status(task_id: str):
-    """Get generation task status"""
-    video = next((v for v in videos_db if v.get('task_id') == task_id), None)
-    if not video:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    return {
-        "task_id": task_id,
-        "status": video.get('status', 'unknown'),
-        "progress": video.get('progress', 0),
-        "result": video.get('result'),
-        "created_at": video.get('created_at')
-    }
-
-# Async processing functions
-async def process_video_generation(task_id: str):
-    """Real video generation processing"""
-    # Find the video request
-    video_data = None
-    for v in videos_db:
-        if v.get('task_id') == task_id:
-            video_data = v
-            break
-
-    if not video_data:
-        return
-
+    """Generate video from text prompt"""
     try:
-        # Update status to processing
-        video_data['status'] = 'processing'
-        video_data['progress'] = 10
+        # Check credits
+        cost = request.num_frames // 24 * 10  # 10 credits per second
+        if not deduct_credits(current_user["username"], cost):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
 
-        # Get generator
-        generator = get_video_generator()
+        task_id = str(uuid.uuid4())
 
-        # Calculate num_frames from duration (assume 24 fps)
-        duration = video_data.get('duration', 5)
-        num_frames = duration * 24
+        # Enhance prompt if requested
+        final_prompt = request.prompt
+        if request.enhance_prompt and prompt_enhancer:
+            try:
+                final_prompt = prompt_enhancer(request.prompt)
+                logger.info(f"Enhanced prompt: {final_prompt}")
+            except Exception as e:
+                logger.warning(f"Prompt enhancement failed: {e}")
 
-        # Generate video with optional voiceover
-        voiceover_text = video_data.get('voiceover_text')
-        voice_id = video_data.get('voice_id')
+        # Create video record
+        video_data = {
+            "id": len(videos_db) + 1,
+            "task_id": task_id,
+            "type": "text-to-video",
+            "title": f"T2V: {request.prompt[:50]}...",
+            "prompt": request.prompt,
+            "enhanced_prompt": final_prompt,
+            "status": "processing",
+            "created_at": datetime.now().isoformat(),
+            "user_id": current_user["id"],
+            "aspect_ratio": request.aspect_ratio,
+            "duration": request.duration,
+            "num_frames": request.num_frames,
+            "style": request.style,
+            "guidance_scale": request.guidance_scale,
+            "cost": cost
+        }
+        videos_db.append(video_data)
 
-        output_path = generator.generate_video(
-            prompt=video_data['prompt'],
-            num_frames=num_frames,
-            fps=24,
-            voiceover_text=voiceover_text,
-            voice_id=voice_id
-        )
+        # Start background task
+        background_tasks.add_task(process_text_to_video_generation, task_id)
 
-        # Update status
-        video_data['status'] = 'completed'
-        video_data['progress'] = 100
-        video_data['result'] = f'/videos/{os.path.basename(output_path)}'
+        return {
+            "task_id": task_id,
+            "status": "processing",
+            "message": "Video generation started",
+            "estimated_time": "2-5 minutes",
+            "cost": cost
+        }
 
     except Exception as e:
-        logger.error(f"Video generation failed: {e}")
-        video_data['status'] = 'failed'
-        video_data['error'] = str(e)
+        logger.error(f"T2V generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-async def process_image_generation(task_id: str):
-    """Mock image generation processing"""
-    await asyncio.sleep(2)
+@app.post("/generate/image-to-video")
+async def generate_image_to_video(
+    background_tasks: BackgroundTasks,
+    prompt: str = Form(...),
+    image: UploadFile = File(...),
+    num_frames: int = Form(97),
+    guidance_scale: float = Form(5.0),
+    enhance_prompt: bool = Form(True),
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate video from image"""
+    try:
+        # Check credits
+        cost = num_frames // 24 * 15  # 15 credits per second for I2V
+        if not deduct_credits(current_user["username"], cost):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
 
-    # Update image status
-    for image in videos_db:
-        if image.get('task_id') == task_id:
-            image['status'] = 'completed'
-            image['progress'] = 100
-            image['images'] = [
-                f'/images/{task_id}_1.png',
-                f'/images/{task_id}_2.png',
-                f'/images/{task_id}_3.png',
-                f'/images/{task_id}_4.png'
-            ]
-            break
+        task_id = str(uuid.uuid4())
 
-async def process_lip_sync_generation(task_id: str):
-    """Mock lip sync processing"""
-    await asyncio.sleep(4)
+        # Save uploaded image
+        image_path = TEMP_DIR / f"{task_id}_input.png"
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
 
-    # Update lip sync status
-    for video in videos_db:
-        if video.get('task_id') == task_id:
-            video['status'] = 'completed'
-            video['progress'] = 100
-            video['result'] = f'/videos/lip_sync_{task_id}.mp4'
-            break
+        # Enhance prompt if requested
+        final_prompt = prompt
+        if enhance_prompt and prompt_enhancer:
+            try:
+                final_prompt = prompt_enhancer(prompt)
+                logger.info(f"Enhanced prompt: {final_prompt}")
+            except Exception as e:
+                logger.warning(f"Prompt enhancement failed: {e}")
 
-async def process_short_film_generation(task_id: str):
-    """Mock short film processing"""
-    await asyncio.sleep(5)
+        # Create video record
+        video_data = {
+            "id": len(videos_db) + 1,
+            "task_id": task_id,
+            "type": "image-to-video",
+            "title": f"I2V: {prompt[:50]}...",
+            "prompt": prompt,
+            "enhanced_prompt": final_prompt,
+            "status": "processing",
+            "created_at": datetime.now().isoformat(),
+            "user_id": current_user["id"],
+            "image_path": str(image_path),
+            "num_frames": num_frames,
+            "guidance_scale": guidance_scale,
+            "cost": cost
+        }
+        videos_db.append(video_data)
 
-    # Update short film status
-    for film in videos_db:
-        if film.get('task_id') == task_id:
-            film['status'] = 'completed'
-            film['progress'] = 100
-            film['result'] = f'/videos/film_{task_id}.mp4'
-            break
+        # Start background task
+        background_tasks.add_task(process_image_to_video_generation, task_id)
 
-async def process_talking_avatar_generation(task_id: str):
-    """Mock talking avatar processing"""
-    await asyncio.sleep(6)
+        return {
+            "task_id": task_id,
+            "status": "processing",
+            "message": "Image-to-video generation started",
+            "estimated_time": "3-7 minutes",
+            "cost": cost
+        }
 
-    # Update talking avatar status
-    for avatar in videos_db:
-        if avatar.get('task_id') == task_id:
-            avatar['status'] = 'completed'
-            avatar['progress'] = 100
-            avatar['result'] = f'/videos/avatar_{task_id}.mp4'
-            break
+    except Exception as e:
+        logger.error(f"I2V generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Prompt Enhancement
 @app.post("/enhance/prompt")
-async def enhance_prompt(request: PromptEnhancementRequest):
-    """Enhance a prompt using AI for better video generation results"""
+async def enhance_prompt_endpoint(request: PromptEnhancementRequest):
+    """Enhance a prompt using AI"""
     if not prompt_enhancer:
         raise HTTPException(status_code=503, detail="Prompt enhancer not available")
 
     try:
         if request.context:
-            enhanced_prompt = prompt_enhancer.enhance_with_context(request.prompt, request.context)
+            enhanced = prompt_enhancer.enhance_with_context(request.prompt, request.context)
         else:
-            enhanced_prompt = prompt_enhancer(request.prompt)
+            enhanced = prompt_enhancer(request.prompt)
 
         return {
             "original_prompt": request.prompt,
-            "enhanced_prompt": enhanced_prompt,
-            "improvement": len(enhanced_prompt) > len(request.prompt)
+            "enhanced_prompt": enhanced,
+            "improvement": len(enhanced) > len(request.prompt)
         }
-
     except Exception as e:
         logger.error(f"Prompt enhancement failed: {e}")
-        raise HTTPException(status_code=500, detail="Prompt enhancement failed")
+        raise HTTPException(status_code=500, detail="Enhancement failed")
 
-# Authentication Endpoints
-@app.post("/auth/login")
-async def login(request: LoginRequest):
-    """User login"""
-    user = authenticate_user(request.email, request.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-
-    access_token = create_access_token(data={"sub": user["email"]})
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user["id"],
-            "email": user["email"],
-            "tier": user["tier"],
-            "credits": user["credits"]
-        }
-    }
-
-@app.post("/auth/register")
-async def register(request: RegisterRequest):
-    """User registration"""
-    try:
-        user = register_user(request.email, request.password, request.tier)
-        access_token = create_access_token(data={"sub": user["email"]})
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user["id"],
-                "email": user["email"],
-                "tier": user["tier"],
-                "credits": user["credits"]
-            }
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Registration failed")
-
-@app.get("/auth/me")
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
-    """Get current user information"""
-    return {
-        "id": current_user["id"],
-        "email": current_user["email"],
-        "tier": current_user["tier"],
-        "credits": current_user["credits"],
-        "created_at": current_user["created_at"]
-    }
-
-# Credit System Endpoints
-@app.get("/credits")
-async def get_credits(current_user: dict = Depends(get_current_user)):
-    """Get user credit balance"""
-    return {
-        "credits": get_user_credits(current_user["email"]),
-        "tier": current_user["tier"]
-    }
-
-@app.post("/credits/purchase")
-async def purchase_credits(request: CreditPurchaseRequest, current_user: dict = Depends(get_current_user)):
-    """Purchase credits or upgrade tier"""
-    if request.tier:
-        # Tier upgrade
-        if upgrade_user_tier(current_user["email"], request.tier):
-            return {"message": f"Successfully upgraded to {request.tier} tier"}
-        else:
-            raise HTTPException(status_code=400, detail="Invalid tier or upgrade failed")
-    else:
-        # Credit purchase
-        if add_credits(current_user["email"], request.amount):
-            return {"message": f"Successfully added {request.amount} credits"}
-        else:
-            raise HTTPException(status_code=400, detail="Credit purchase failed")
-
-@app.get("/pricing")
-async def get_pricing():
-    """Get pricing information"""
-    from .auth import get_pricing_info
-    return {"tiers": get_pricing_info()}
-
-# Audio Library Endpoints
-@app.get("/audio/sound-effects")
-async def get_sound_effects_endpoint(category: Optional[str] = None, search: Optional[str] = None):
-    """Get sound effects library"""
-    return {"sound_effects": get_sound_effects(category, search)}
-
-@app.get("/audio/music")
-async def get_music_tracks_endpoint(category: Optional[str] = None, mood: Optional[str] = None, search: Optional[str] = None):
-    """Get music tracks library"""
-    return {"music": get_music_tracks(category, mood, search)}
-
-@app.get("/audio/categories")
-async def get_audio_categories_endpoint():
-    """Get audio categories"""
-    return get_audio_categories()
-
-@app.get("/audio/{audio_id}")
-async def get_audio_by_id_endpoint(audio_id: str):
-    """Get audio file by ID"""
-    audio = get_audio_by_id(audio_id)
-    if not audio:
-        raise HTTPException(status_code=404, detail="Audio not found")
-    return audio
-
-@app.get("/audio/search")
-async def search_audio_endpoint(q: str, type: Optional[str] = "all"):
-    """Search audio files"""
-    return {"results": search_audio(q, type)}
-
-# Content Management Endpoints
-@app.get("/admin/content")
-async def get_all_content_endpoint(current_user: dict = Depends(get_current_user)):
-    """Get all content settings for admin"""
-    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    return get_all_content()
-
-@app.get("/admin/content/{section}")
-async def get_content_section_endpoint(section: str, current_user: dict = Depends(get_current_user)):
-    """Get content for a specific section"""
-    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    return get_content_section(section)
-
-@app.put("/admin/content/{section}")
-async def update_content_section_endpoint(
-    section: str,
-    content: Dict[str, Any],
+@app.post("/generate/voiceover")
+async def generate_voiceover(
+    request: VoiceoverRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update content for a specific section"""
-    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Generate voiceover audio"""
+    try:
+        # Check credits (10 credits per minute)
+        estimated_cost = max(10, len(request.text) // 150)  # Rough estimate
+        if not deduct_credits(current_user["username"], estimated_cost):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
 
-    # Validate content
-    is_valid, error_msg = validate_content(section, content)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        from ..utils.voiceover_generator import VoiceoverGenerator
+        generator = VoiceoverGenerator()
 
-    # Save content
-    if save_content_section(section, content):
-        return {"message": f"{section} content updated successfully"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to save content")
+        audio_path = generator.generate_voiceover(
+            text=request.text,
+            voice_id=request.voice_id,
+            model=request.model
+        )
 
-@app.delete("/admin/content/{section}")
-async def reset_content_section_endpoint(section: str, current_user: dict = Depends(get_current_user)):
-    """Reset content section to defaults"""
-    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        if not audio_path:
+            raise HTTPException(status_code=500, detail="Voiceover generation failed")
 
-    if reset_content_section(section):
-        return {"message": f"{section} content reset to defaults"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to reset content")
+        # Move to videos directory
+        final_path = VIDEOS_DIR / f"voiceover_{uuid.uuid4()}.mp3"
+        shutil.move(audio_path, final_path)
 
-@app.post("/admin/content/backup")
-async def backup_content_endpoint(current_user: dict = Depends(get_current_user)):
-    """Create content backup"""
-    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        return {
+            "audio_url": f"/videos/{final_path.name}",
+            "cost": estimated_cost
+        }
 
-    backup_file = backup_content()
-    if backup_file:
-        return {"message": "Content backup created", "backup_file": backup_file}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to create backup")
+    except Exception as e:
+        logger.error(f"Voiceover generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/admin/content/restore")
-async def restore_content_endpoint(backup_file: str, current_user: dict = Depends(get_current_user)):
-    """Restore content from backup"""
-    if current_user.get("tier") != "enterprise" and not current_user.get("is_admin", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
+@app.post("/edit/video")
+async def edit_video(
+    background_tasks: BackgroundTasks,
+    video: UploadFile = File(...),
+    operation: str = Form(...),
+    params: str = Form(...),  # JSON string
+    current_user: dict = Depends(get_current_user)
+):
+    """Edit video (trim, add text, etc.)"""
+    try:
+        # Check credits
+        cost = 5  # Base cost for editing
+        if not deduct_credits(current_user["username"], cost):
+            raise HTTPException(status_code=402, detail="Insufficient credits")
 
-    if restore_content(backup_file):
-        return {"message": "Content restored from backup"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to restore content")
+        task_id = str(uuid.uuid4())
 
-# Public Content Endpoints (for frontend)
-@app.get("/content/{section}")
-async def get_public_content_section(section: str):
-    """Get content for frontend (public access)"""
-    return get_content_section(section)
+        # Save uploaded video
+        video_path = TEMP_DIR / f"{task_id}_input.mp4"
+        with open(video_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
 
-# Health check
-@app.get("/health")
-async def health_check():
-    """API health check"""
-    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+        # Parse params
+        edit_params = json.loads(params)
+
+        # Create edit record
+        edit_data = {
+            "id": len(videos_db) + 1,
+            "task_id": task_id,
+            "type": "video-edit",
+            "title": f"Edit: {operation}",
+            "status": "processing",
+            "created_at": datetime.now().isoformat(),
+            "user_id": current_user["id"],
+            "input_video": str(video_path),
+            "operation": operation,
+            "params": edit_params,
+            "cost": cost
+        }
+        videos_db.append(edit_data)
+
+        # Start background task
+        background_tasks.add_task(process_video_edit, task_id)
+
+        return {
+            "task_id": task_id,
+            "status": "processing",
+            "message": f"Video {operation} started",
+            "cost": cost
+        }
+
+    except Exception as e:
+        logger.error(f"Video edit failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/videos")
+async def get_videos(
+    current_user: dict = Depends(get_current_user),
+    status: Optional[str] = None,
+    limit: int = 50
+):
+    """Get user's videos"""
+    user_videos = [v for v in videos_db if v.get("user_id") == current_user["id"]]
+
+    if status and status != "all":
+        user_videos = [v for v in user_videos if v.get("status") == status]
+
+    return {
+        "videos": user_videos[-limit:],  # Most recent first
+        "total": len(user_videos)
+    }
+
+@app.get("/status/{task_id}")
+async def get_task_status(
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get generation task status"""
+    task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return {
+        "task_id": task_id,
+        "status": task.get("status"),
+        "progress": task.get("progress", 0),
+        "result": task.get("result"),
+        "error": task.get("error"),
+        "created_at": task.get("created_at")
+    }
+
+# Background processing functions
+
+async def process_text_to_video_generation(task_id: str):
+    """Process T2V generation in background"""
+    try:
+        # Find task
+        task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+        if not task:
+            return
+
+        task["status"] = "processing"
+        task["progress"] = 10
+
+        # Get generator
+        generator = get_video_generator()
+        if not generator:
+            raise Exception("Video generator not available")
+
+        # Generate video
+        output_path = generator.generate_video(
+            prompt=task["enhanced_prompt"],
+            num_frames=task["num_frames"],
+            fps=24,
+            aspect_ratio=task.get("aspect_ratio", "16:9")
+        )
+
+        # Move to videos directory
+        final_path = VIDEOS_DIR / f"video_{task_id}.mp4"
+        shutil.move(output_path, final_path)
+
+        # Update task
+        task["status"] = "completed"
+        task["progress"] = 100
+        task["result"] = f"/videos/{final_path.name}"
+
+    except Exception as e:
+        logger.error(f"T2V processing failed: {e}")
+        task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+        if task:
+            task["status"] = "failed"
+            task["error"] = str(e)
+
+async def process_image_to_video_generation(task_id: str):
+    """Process I2V generation in background"""
+    try:
+        # Find task
+        task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+        if not task:
+            return
+
+        task["status"] = "processing"
+        task["progress"] = 10
+
+        # Get generator
+        generator = get_video_generator()
+        if not generator:
+            raise Exception("Video generator not available")
+
+        # Generate video
+        output_path = generator.generate_video_from_image(
+            image_path=task["image_path"],
+            prompt=task["enhanced_prompt"],
+            num_frames=task["num_frames"],
+            fps=24
+        )
+
+        # Move to videos directory
+        final_path = VIDEOS_DIR / f"i2v_{task_id}.mp4"
+        shutil.move(output_path, final_path)
+
+        # Update task
+        task["status"] = "completed"
+        task["progress"] = 100
+        task["result"] = f"/videos/{final_path.name}"
+
+    except Exception as e:
+        logger.error(f"I2V processing failed: {e}")
+        task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+        if task:
+            task["status"] = "failed"
+            task["error"] = str(e)
+
+async def process_video_edit(task_id: str):
+    """Process video editing in background"""
+    try:
+        # Find task
+        task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+        if not task:
+            return
+
+        task["status"] = "processing"
+        task["progress"] = 10
+
+        # Apply edit operation
+        input_path = task["input_video"]
+        operation = task["operation"]
+        params = task["params"]
+
+        # Simple FFmpeg operations (expand as needed)
+        import subprocess
+
+        output_path = VIDEOS_DIR / f"edit_{task_id}.mp4"
+
+        if operation == "trim":
+            start = params.get("start", 0)
+            duration = params.get("duration", 10)
+            cmd = [
+                "ffmpeg", "-i", input_path,
+                "-ss", str(start), "-t", str(duration),
+                "-c", "copy", str(output_path)
+            ]
+        elif operation == "add_text":
+            text = params.get("text", "Sample Text")
+            cmd = [
+                "ffmpeg", "-i", input_path,
+                "-vf", f"drawtext=text='{text}':fontsize=24:fontcolor=white:x=10:y=10",
+                "-c:a", "copy", str(output_path)
+            ]
+        else:
+            # Default: copy
+            cmd = ["ffmpeg", "-i", input_path, "-c", "copy", str(output_path)]
+
+        subprocess.run(cmd, check=True)
+
+        # Update task
+        task["status"] = "completed"
+        task["progress"] = 100
+        task["result"] = f"/videos/{output_path.name}"
+
+    except Exception as e:
+        logger.error(f"Video edit processing failed: {e}")
+        task = next((t for t in videos_db if t.get("task_id") == task_id), None)
+        if task:
+            task["status"] = "failed"
+            task["error"] = str(e)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
