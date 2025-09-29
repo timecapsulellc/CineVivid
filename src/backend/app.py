@@ -2,7 +2,7 @@
 CineVivid Backend API
 FastAPI backend for AI video generation using SkyReels-V2
 """
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +29,7 @@ from .auth import (
     authenticate_user, create_access_token, get_current_user,
     deduct_credits, get_user_credits, ACCESS_TOKEN_EXPIRE_MINUTES
 )
+from ..utils.stripe_utils import create_checkout_session, handle_webhook_event, get_pricing_plans
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -187,6 +188,42 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 async def get_credits(current_user: dict = Depends(get_current_user)):
     """Get user credits"""
     return {"credits": get_user_credits(current_user["username"])}
+
+# Stripe billing endpoints
+@app.get("/billing/plans")
+async def get_billing_plans():
+    """Get available pricing plans"""
+    return get_pricing_plans()
+
+@app.post("/billing/create-checkout-session")
+async def create_checkout(tier: str = Form(...), current_user: dict = Depends(get_current_user)):
+    """Create Stripe checkout session"""
+    session = create_checkout_session(current_user["username"], tier)
+    if session:
+        return session
+    raise HTTPException(status_code=400, detail="Invalid tier or payment setup")
+
+@app.post("/billing/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks"""
+    payload = await request.body()
+    sig_header = request.headers.get('stripe-signature')
+
+    try:
+        # Verify webhook signature (would need webhook secret)
+        # stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+
+        event = json.loads(payload)
+        success = handle_webhook_event(event)
+
+        if success:
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Webhook processing failed")
+
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        raise HTTPException(status_code=400, detail="Webhook verification failed")
 
 # Video Generation endpoints
 

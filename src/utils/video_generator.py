@@ -17,21 +17,23 @@ class VideoGenerator:
     Video generator using SkyReels-V2 models
     """
 
-    def __init__(self, model_id: str = "Skywork/SkyReels-V2-T2V-14B-540P"):
+    def __init__(self, model_id: str = "Skywork/SkyReels-V2-T2V-14B-540P", use_quantization: bool = False):
         """
         Initialize the video generator
 
         Args:
             model_id: HuggingFace model ID for SkyReels-V2
+            use_quantization: Whether to use 8-bit quantization for memory efficiency
         """
         self.model_id = model_id
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.use_quantization = use_quantization
         self.pipeline = None
         self.temp_dir = Path("../temp")
         self.temp_dir.mkdir(exist_ok=True)
 
         logger.info(f"Initializing VideoGenerator with model: {model_id}")
-        logger.info(f"Using device: {self.device}")
+        logger.info(f"Using device: {self.device}, Quantization: {use_quantization}")
 
     def _load_pipeline(self):
         """Lazy load the diffusion pipeline"""
@@ -40,11 +42,15 @@ class VideoGenerator:
                 from diffusers import SkyReelsV2Pipeline, UniPCMultistepScheduler
 
                 logger.info("Loading SkyReels-V2 pipeline...")
+                torch_dtype = torch.float16 if self.use_quantization else (torch.bfloat16 if self.device == "cuda" else torch.float32)
+
                 self.pipeline = SkyReelsV2Pipeline.from_pretrained(
                     self.model_id,
-                    torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
+                    torch_dtype=torch_dtype,
                     safety_checker=None,
-                    requires_safety_checker=False
+                    requires_safety_checker=False,
+                    load_in_8bit=self.use_quantization,
+                    device_map="auto" if self.use_quantization else None
                 )
 
                 # Set scheduler
@@ -53,7 +59,7 @@ class VideoGenerator:
                     self.pipeline.scheduler.config, flow_shift=flow_shift
                 )
 
-                if self.device == "cuda":
+                if not self.use_quantization and self.device == "cuda":
                     self.pipeline = self.pipeline.to(self.device)
 
                 logger.info("Pipeline loaded successfully")
