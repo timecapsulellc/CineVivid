@@ -1,171 +1,275 @@
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+"""
+Prompt Enhancer for CineVivid
+Enhances video generation prompts using Qwen2.5-32B-Instruct
+"""
+import os
 import logging
+from typing import Optional, Dict, Any
+import requests
+import json
 
 logger = logging.getLogger(__name__)
 
 class PromptEnhancer:
     """
-    Prompt enhancer using Qwen2.5-32B-Instruct model to improve video generation prompts.
+    Prompt enhancer using Qwen2.5-32B-Instruct for video generation prompts
     """
-
-    def __init__(self, model_name="Qwen/Qwen2.5-32B-Instruct", device="auto"):
+    
+    def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize the prompt enhancer.
-
+        Initialize prompt enhancer
+        
         Args:
-            model_name: HuggingFace model name
-            device: Device to run the model on ('auto', 'cuda', 'cpu')
+            api_key: Hugging Face API key for model access
         """
-        self.model_name = model_name
-        self.device = device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
-
-        try:
-            logger.info(f"Loading prompt enhancer model: {model_name}")
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.bfloat16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                trust_remote_code=True
-            )
-
-            if self.device == "cuda":
-                self.model = self.model.to(self.device)
-
-            logger.info("Prompt enhancer loaded successfully")
-
-        except Exception as e:
-            logger.error(f"Failed to load prompt enhancer: {e}")
-            self.model = None
-            self.tokenizer = None
-
+        self.api_key = api_key or os.getenv("HUGGINGFACE_TOKEN")
+        self.model_id = "Qwen/Qwen2.5-32B-Instruct"
+        self.base_url = "https://api-inference.huggingface.co/models"
+        
+        if not self.api_key:
+            logger.warning("No Hugging Face API key provided. Prompt enhancement will be limited.")
+    
     def __call__(self, prompt: str) -> str:
         """
-        Enhance a video generation prompt.
-
+        Enhance a prompt for video generation
+        
         Args:
-            prompt: Original user prompt
-
+            prompt: Original prompt text
+            
         Returns:
-            Enhanced prompt with more detailed descriptions
+            Enhanced prompt with more cinematic details
         """
-        if not self.model or not self.tokenizer:
-            logger.warning("Prompt enhancer not available, returning original prompt")
-            return prompt
-
-        try:
-            # Create enhancement prompt
-            enhancement_prompt = f"""You are an expert at writing detailed, cinematic prompts for AI video generation. Take the user's basic prompt and enhance it with:
-
-1. Specific visual details (colors, lighting, composition)
-2. Camera angles and movement descriptions
-3. Atmospheric elements (mood, time of day, weather)
-4. Character descriptions and actions
-5. Scene composition and cinematography terms
-6. Technical details that improve video quality
-
-Original prompt: "{prompt}"
-
-Enhanced prompt:"""
-
-            # Tokenize
-            inputs = self.tokenizer(enhancement_prompt, return_tensors="pt")
-            if self.device == "cuda":
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-            # Generate enhanced prompt
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=200,
-                    temperature=0.7,
-                    do_sample=True,
-                    top_p=0.9,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
-
-            # Decode and extract enhanced prompt
-            full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-            # Extract the enhanced prompt part (after "Enhanced prompt:")
-            enhanced_part = full_response.split("Enhanced prompt:")[-1].strip()
-
-            # Clean up the response
-            enhanced_prompt = enhanced_part.split("\n")[0].strip().strip('"')
-
-            # Fallback if enhancement failed
-            if not enhanced_prompt or len(enhanced_prompt) < len(prompt) * 0.5:
-                logger.warning("Enhancement failed, returning original prompt")
-                return prompt
-
-            logger.info(f"Enhanced prompt: {enhanced_prompt}")
-            return enhanced_prompt
-
-        except Exception as e:
-            logger.error(f"Prompt enhancement failed: {e}")
-            return prompt
-
-    def enhance_with_context(self, prompt: str, context: dict = None) -> str:
+        return self.enhance_prompt(prompt)
+    
+    def enhance_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         """
-        Enhance prompt with additional context information.
-
+        Enhance a basic prompt with cinematic details
+        
         Args:
             prompt: Original prompt
-            context: Dictionary with context like {'style': 'cinematic', 'duration': 5, 'aspect_ratio': '16:9'}
-
+            context: Additional context for enhancement
+            
         Returns:
-            Enhanced prompt incorporating context
+            Enhanced prompt
         """
-        if not context:
-            return self(prompt)
-
-        # Add context to the enhancement prompt
-        context_str = ", ".join([f"{k}: {v}" for k, v in context.items()])
-
-        enhancement_prompt = f"""You are an expert at writing detailed, cinematic prompts for AI video generation. Take the user's basic prompt and enhance it with:
-
-1. Specific visual details (colors, lighting, composition)
-2. Camera angles and movement descriptions
-3. Atmospheric elements (mood, time of day, weather)
-4. Character descriptions and actions
-5. Scene composition and cinematography terms
-6. Technical details that improve video quality
-
-Additional context: {context_str}
-
-Original prompt: "{prompt}"
-
-Enhanced prompt:"""
-
-        # Use the same generation logic as __call__
-        if not self.model or not self.tokenizer:
-            return prompt
-
+        if not self.api_key:
+            # Fallback enhancement without API
+            return self._fallback_enhance(prompt)
+        
         try:
-            inputs = self.tokenizer(enhancement_prompt, return_tensors="pt")
-            if self.device == "cuda":
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=250,
-                    temperature=0.7,
-                    do_sample=True,
-                    top_p=0.9,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
-
-            full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            enhanced_part = full_response.split("Enhanced prompt:")[-1].strip()
-            enhanced_prompt = enhanced_part.split("\n")[0].strip().strip('"')
-
-            if not enhanced_prompt or len(enhanced_prompt) < len(prompt) * 0.5:
-                return prompt
-
-            return enhanced_prompt
-
+            enhanced = self._api_enhance(prompt, context)
+            if enhanced:
+                return enhanced
         except Exception as e:
-            logger.error(f"Context-enhanced prompt generation failed: {e}")
-            return prompt
+            logger.warning(f"API enhancement failed: {e}")
+        
+        # Fallback to rule-based enhancement
+        return self._fallback_enhance(prompt)
+    
+    def _api_enhance(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """
+        Enhance prompt using Qwen2.5 API
+        
+        Args:
+            prompt: Original prompt
+            context: Additional context
+            
+        Returns:
+            Enhanced prompt or None if failed
+        """
+        system_prompt = """You are a professional video production assistant specializing in creating detailed, cinematic prompts for AI video generation. Transform basic descriptions into rich, detailed prompts that include:
+
+1. Visual composition (camera angles, shots, framing)
+2. Lighting and atmosphere
+3. Motion and dynamics
+4. Style and aesthetic
+5. Technical details for professional quality
+
+Keep the enhancement under 200 words and maintain the original intent."""
+
+        user_prompt = f"Enhance this video prompt for professional AI video generation: '{prompt}'"
+        
+        if context:
+            user_prompt += f"\nAdditional context: {json.dumps(context)}"
+
+        payload = {
+            "inputs": {
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            },
+            "parameters": {
+                "max_new_tokens": 200,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/{self.model_id}",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0:
+                    enhanced = result[0].get("generated_text", "")
+                    # Extract just the enhanced prompt
+                    if "Enhanced prompt:" in enhanced:
+                        enhanced = enhanced.split("Enhanced prompt:")[-1].strip()
+                    return enhanced
+            else:
+                logger.warning(f"API request failed: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"API enhancement error: {e}")
+            
+        return None
+    
+    def _fallback_enhance(self, prompt: str) -> str:
+        """
+        Fallback rule-based prompt enhancement
+        
+        Args:
+            prompt: Original prompt
+            
+        Returns:
+            Enhanced prompt using rules
+        """
+        # Basic enhancement templates
+        cinematic_elements = [
+            "cinematic composition",
+            "professional cinematography", 
+            "high-quality video",
+            "smooth camera movement",
+            "dramatic lighting",
+            "rich colors",
+            "detailed textures"
+        ]
+        
+        # Check if prompt is very short and basic
+        if len(prompt.split()) < 10:
+            # Add more descriptive elements
+            enhanced = f"{prompt}, {', '.join(cinematic_elements[:3])}, 4K resolution"
+        else:
+            # Just add cinematic quality markers
+            enhanced = f"{prompt}, cinematic quality, professional video production"
+        
+        return enhanced
+    
+    def enhance_with_context(self, prompt: str, context: Dict[str, Any]) -> str:
+        """
+        Enhance prompt with specific context
+        
+        Args:
+            prompt: Original prompt
+            context: Context including style, mood, etc.
+            
+        Returns:
+            Context-aware enhanced prompt
+        """
+        style = context.get("style", "cinematic")
+        mood = context.get("mood", "neutral")
+        duration = context.get("duration", 5)
+        aspect_ratio = context.get("aspect_ratio", "16:9")
+        
+        # Build context-aware enhancement
+        enhancements = []
+        
+        if style == "cinematic":
+            enhancements.append("cinematic style with professional camera work")
+        elif style == "documentary":
+            enhancements.append("documentary style with natural lighting")
+        elif style == "artistic":
+            enhancements.append("artistic composition with creative cinematography")
+        
+        if mood == "dramatic":
+            enhancements.append("dramatic lighting and intense atmosphere")
+        elif mood == "peaceful":
+            enhancements.append("soft lighting and calm atmosphere")
+        elif mood == "energetic":
+            enhancements.append("dynamic movement and vibrant colors")
+        
+        if duration > 10:
+            enhancements.append("smooth transitions and continuous motion")
+        
+        enhanced_prompt = f"{prompt}, {', '.join(enhancements)}"
+        
+        return self.enhance_prompt(enhanced_prompt, context)
+
+    def get_enhancement_suggestions(self, prompt: str) -> Dict[str, str]:
+        """
+        Get multiple enhancement suggestions for a prompt
+        
+        Args:
+            prompt: Original prompt
+            
+        Returns:
+            Dictionary of different enhancement styles
+        """
+        suggestions = {}
+        
+        # Different enhancement styles
+        contexts = {
+            "cinematic": {"style": "cinematic", "mood": "dramatic"},
+            "natural": {"style": "documentary", "mood": "peaceful"},
+            "artistic": {"style": "artistic", "mood": "creative"},
+            "commercial": {"style": "commercial", "mood": "professional"}
+        }
+        
+        for style, context in contexts.items():
+            try:
+                suggestions[style] = self.enhance_with_context(prompt, context)
+            except Exception as e:
+                logger.warning(f"Failed to create {style} suggestion: {e}")
+                suggestions[style] = prompt
+        
+        return suggestions
+
+    def validate_prompt(self, prompt: str) -> Dict[str, Any]:
+        """
+        Validate and analyze a prompt for video generation
+        
+        Args:
+            prompt: Prompt to validate
+            
+        Returns:
+            Validation results and suggestions
+        """
+        issues = []
+        suggestions = []
+        
+        # Check prompt length
+        if len(prompt) < 10:
+            issues.append("Prompt too short - may not provide enough detail")
+            suggestions.append("Add more descriptive elements")
+        elif len(prompt) > 500:
+            issues.append("Prompt too long - may cause confusion")
+            suggestions.append("Simplify and focus on key elements")
+        
+        # Check for technical terms
+        technical_terms = ["4K", "HD", "fps", "resolution", "quality"]
+        if not any(term.lower() in prompt.lower() for term in technical_terms):
+            suggestions.append("Consider adding quality indicators")
+        
+        # Check for motion descriptions
+        motion_words = ["moving", "walking", "flying", "flowing", "spinning"]
+        if not any(word in prompt.lower() for word in motion_words):
+            suggestions.append("Consider adding motion descriptions")
+        
+        return {
+            "is_valid": len(issues) == 0,
+            "issues": issues,
+            "suggestions": suggestions,
+            "word_count": len(prompt.split()),
+            "estimated_enhancement": len(prompt) < 50
+        }
